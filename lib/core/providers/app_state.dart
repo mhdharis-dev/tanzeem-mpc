@@ -78,9 +78,23 @@ class AppState extends ChangeNotifier {
     _participants = List.from(DummyData.initialParticipants);
     _madrasas = List.from(DummyData.initialMadrasas);
     _notifications = List.from(DummyData.initialNotifications);
-    
+
+    _fetchMadrasasFromFirestore();
     generateAutoSchedule();
     _loadUserSession();
+  }
+
+  void _fetchMadrasasFromFirestore() {
+    try {
+      FirebaseFirestore.instance.collection('madrasa').snapshots().listen((snapshot) {
+        _madrasas = snapshot.docs.map((doc) => MadrasaModel.fromSnapshot(doc)).toList();
+        notifyListeners();
+      }, onError: (e) {
+        debugPrint('Firestore _fetchMadrasasFromFirestore stream error: $e');
+      });
+    } catch (e) {
+      debugPrint('Firestore stream init error: $e');
+    }
   }
 
   Future<void> _loadUserSession() async {
@@ -180,12 +194,46 @@ class AppState extends ChangeNotifier {
       return true;
     }
     
-    // 2. Program Coordinator Authentication (.tanzeem or .thanzeem, password length >= 6)
-    if ((cleanEmail.endsWith('.tanzeem') || cleanEmail.endsWith('.thanzeem')) && password.length >= 6) {
+    // 2. Program Coordinator Real Role-Based Authentication (querying registered madrasa credentials in Firestore)
+    try {
+      final madrasaQuery = await FirebaseFirestore.instance
+          .collection('madrasa')
+          .where('email', isEqualTo: cleanEmail)
+          .where('password', isEqualTo: password)
+          .get();
+
+      if (madrasaQuery.docs.isNotEmpty) {
+        final madrasaDoc = madrasaQuery.docs.first;
+        final madrasa = MadrasaModel.fromSnapshot(madrasaDoc);
+
+        _userRole = 'Program Coordinator';
+        _userEmail = cleanEmail;
+        _isLoggedIn = true;
+        _activeTabIndex = 0;
+        madrasaName = madrasa.madrasaName;
+
+        updateMadrasaOnlineStatus(cleanEmail, true);
+        await _saveUserSession(true, _userEmail, _userRole);
+        notifyListeners();
+        return true;
+      }
+    } catch (e) {
+      debugPrint('Firestore Coordinator Auth check error: $e');
+    }
+
+    // Local in-memory fallback check for registered madrasas
+    final localMadrasaIndex = _madrasas.indexWhere(
+      (m) => m.email.trim().toLowerCase() == cleanEmail && m.password == password,
+    );
+    if (localMadrasaIndex != -1) {
+      final madrasa = _madrasas[localMadrasaIndex];
       _userRole = 'Program Coordinator';
       _userEmail = cleanEmail;
       _isLoggedIn = true;
       _activeTabIndex = 0;
+      madrasaName = madrasa.madrasaName;
+
+      updateMadrasaOnlineStatus(cleanEmail, true);
       await _saveUserSession(true, _userEmail, _userRole);
       notifyListeners();
       return true;
@@ -194,7 +242,28 @@ class AppState extends ChangeNotifier {
     return false;
   }
 
+  void updateMadrasaOnlineStatus(String email, bool online) {
+    int idx = _madrasas.indexWhere((m) => m.email.toLowerCase() == email.toLowerCase());
+    if (idx != -1) {
+      _madrasas[idx].isOnline = online;
+      _madrasas[idx].lastActive = online ? 'Online now' : 'Last seen just now';
+      notifyListeners();
+
+      try {
+        FirebaseFirestore.instance.collection('madrasa').doc(_madrasas[idx].madrasaId).set({
+          'isOnline': online,
+          'lastActive': online ? 'Online now' : 'Last seen just now',
+        }, SetOptions(merge: true));
+      } catch (e) {
+        debugPrint('Firestore updateMadrasaOnlineStatus error: $e');
+      }
+    }
+  }
+
   void logout() {
+    if (_userEmail.isNotEmpty) {
+      updateMadrasaOnlineStatus(_userEmail, false);
+    }
     _isLoggedIn = false;
     _userEmail = '';
     _activeTabIndex = 0;

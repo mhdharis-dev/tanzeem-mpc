@@ -141,7 +141,7 @@ class DashboardScreen extends StatelessWidget {
                                     ),
                                   ),
                                   Text(
-                                    appState.userRole == 'Super Admin' ? '12 Madrasas Synced' : 'Clear Sky • Humidity 62%',
+                                    appState.userRole == 'Super Admin' ? '${appState.madrasas.length} Madrasas Synced' : 'Clear Sky • Humidity 62%',
                                     style: GoogleFonts.poppins(
                                       fontSize: 11,
                                       color: isDark ? AppColors.subtextLight : AppColors.subtextDark,
@@ -264,8 +264,8 @@ class DashboardScreen extends StatelessWidget {
                         _buildStatCard(
                           context,
                           title: 'Authorized Coordinators',
-                          value: '48 Active',
-                          subtitle: 'Active session tokens',
+                          value: '${appState.madrasas.length} Registered',
+                          subtitle: '${appState.madrasas.where((m) => m.isOnline).length} Online Now',
                           icon: Icons.admin_panel_settings_rounded,
                           color: AppColors.secondary,
                         ),

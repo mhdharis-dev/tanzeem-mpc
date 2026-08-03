@@ -465,6 +465,8 @@ class SuperAdminScreen extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          _buildDetailCard(context, 'Active Status (Last Login)', m.isOnline ? 'Online now' : m.lastActive, m.isOnline ? Icons.circle : Icons.circle_outlined, isDark),
+                          const SizedBox(height: 10),
                           _buildDetailCard(context, 'Madrasa ID', m.madrasaId, Icons.badge_outlined, isDark),
                           const SizedBox(height: 10),
                           _buildDetailCard(context, 'Address / Location', m.address, Icons.location_on_outlined, isDark),
@@ -665,14 +667,31 @@ class SuperAdminScreen extends StatelessWidget {
                       children: [
                         Row(
                           children: [
-                            Container(
-                              width: 44,
-                              height: 44,
-                              decoration: BoxDecoration(
-                                color: AppColors.primary.withAlpha(30),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Icon(Icons.school_rounded, color: AppColors.primary, size: 24),
+                            Stack(
+                              children: [
+                                Container(
+                                  width: 44,
+                                  height: 44,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primary.withAlpha(30),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: const Icon(Icons.school_rounded, color: AppColors.primary, size: 24),
+                                ),
+                                Positioned(
+                                  right: 0,
+                                  bottom: 0,
+                                  child: Container(
+                                    width: 12,
+                                    height: 12,
+                                    decoration: BoxDecoration(
+                                      color: m.isOnline ? AppColors.success : Colors.grey,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: isDark ? AppColors.cardDark : Colors.white, width: 2),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                             const SizedBox(width: 12),
                             Expanded(
@@ -685,7 +704,27 @@ class SuperAdminScreen extends StatelessWidget {
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
-                                  Text('RegNo: ${m.madrasaRegNo}', style: GoogleFonts.poppins(fontSize: 11, color: AppColors.subtextDark)),
+                                  Row(
+                                    children: [
+                                      Container(
+                                        width: 6,
+                                        height: 6,
+                                        decoration: BoxDecoration(
+                                          color: m.isOnline ? AppColors.success : Colors.grey,
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        m.isOnline ? 'Online now' : m.lastActive,
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 11,
+                                          fontWeight: m.isOnline ? FontWeight.bold : FontWeight.normal,
+                                          color: m.isOnline ? AppColors.success : (isDark ? AppColors.subtextLight : AppColors.subtextDark),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ],
                               ),
                             ),

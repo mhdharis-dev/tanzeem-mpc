@@ -10,6 +10,8 @@ class MadrasaModel {
   final String email; // Auto-generated: ${coordinatorFirstName}@${madrasaRegNo}.tanzeem
   final String password; // Auto-generated: ${coordinatorName}@${madrasaRegNo}
   final String createdAt;
+  bool isOnline; // WhatsApp style online active status
+  String lastActive; // WhatsApp style last seen / active time
 
   MadrasaModel({
     required this.madrasaId,
@@ -21,6 +23,8 @@ class MadrasaModel {
     required this.email,
     required this.password,
     required this.createdAt,
+    this.isOnline = false,
+    this.lastActive = 'Offline',
   });
 
   // Auto-generator helper methods
@@ -54,6 +58,8 @@ class MadrasaModel {
       'email': email,
       'password': password,
       'createdAt': createdAt,
+      'isOnline': isOnline,
+      'lastActive': lastActive,
     };
   }
 
@@ -68,6 +74,8 @@ class MadrasaModel {
       email: map['email'] ?? '',
       password: map['password'] ?? '',
       createdAt: map['createdAt'] ?? DateTime.now().toIso8601String(),
+      isOnline: map['isOnline'] ?? false,
+      lastActive: map['lastActive'] ?? 'Offline',
     );
   }
 

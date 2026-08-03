@@ -198,52 +198,7 @@ class DummyData {
     ),
   ];
 
-  static List<MadrasaModel> get initialMadrasas => [
-        MadrasaModel(
-          madrasaId: 'reg101@tanzeem',
-          madrasaName: 'Al-Azhar Central Madrasa',
-          madrasaRegNo: 'REG101',
-          address: 'Grand Campus, Calicut',
-          coordinatorName: 'Usthad Ahmed',
-          coordinatorPhone: '+91 9876543210',
-          email: 'ahmed@reg101.tanzeem',
-          password: 'usthadahmed@reg101',
-          createdAt: '2026-08-01 10:00 AM',
-        ),
-        MadrasaModel(
-          madrasaId: 'reg102@tanzeem',
-          madrasaName: 'Sirajul Huda Model Academy',
-          madrasaRegNo: 'REG102',
-          address: 'Kuttiadi Zone, Kozhikode',
-          coordinatorName: 'Usthad Shareef',
-          coordinatorPhone: '+91 9876543211',
-          email: 'shareef@reg102.tanzeem',
-          password: 'usthadshareef@reg102',
-          createdAt: '2026-08-01 11:30 AM',
-        ),
-        MadrasaModel(
-          madrasaId: 'reg103@tanzeem',
-          madrasaName: 'Al-Hidayah Islamic Complex',
-          madrasaRegNo: 'REG103',
-          address: 'Malappuram East',
-          coordinatorName: 'Usthad Bilal',
-          coordinatorPhone: '+91 9876543212',
-          email: 'bilal@reg103.tanzeem',
-          password: 'usthadbilal@reg103',
-          createdAt: '2026-08-01 02:15 PM',
-        ),
-        MadrasaModel(
-          madrasaId: 'reg104@tanzeem',
-          madrasaName: 'Markaz Knowledge City Madrasa',
-          madrasaRegNo: 'REG104',
-          address: 'Kanthapuram Campus',
-          coordinatorName: 'Usthad Usman',
-          coordinatorPhone: '+91 9876543213',
-          email: 'usman@reg104.tanzeem',
-          password: 'usthadusman@reg104',
-          createdAt: '2026-08-01 04:45 PM',
-        ),
-      ];
+  static List<MadrasaModel> get initialMadrasas => [];
 
   static List<NotificationItem> get initialNotifications => [
     NotificationItem(
