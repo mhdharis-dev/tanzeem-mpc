@@ -1,11 +1,8 @@
 [build]
   publish = "build/web"
-  command = "flutter build web --release"
+  command = "if [ ! -d _flutter ]; then git clone https://github.com/flutter/flutter.git -b stable --depth 1 _flutter; fi && ./_flutter/bin/flutter build web --release"
 
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
-
-[build.environment]
-  FLUTTER_CHANNEL = "stable"
