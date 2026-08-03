@@ -33,7 +33,6 @@ class MainLayout extends StatelessWidget {
             const SuperAdminScreen(),
             const ParticipantsScreen(),
             const ReportsScreen(),
-            const SettingsScreen(),
           ]
         : [
             const DashboardScreen(),
@@ -102,9 +101,13 @@ class MainLayout extends StatelessWidget {
         // Participants Directory Shortcut
         const SingleActivator(LogicalKeyboardKey.keyF, control: true): () => appState.setTabIndex(appState.userRole == 'Super Admin' ? 2 : 4),
         const SingleActivator(LogicalKeyboardKey.keyF, meta: true): () => appState.setTabIndex(appState.userRole == 'Super Admin' ? 2 : 4),
-        // System Settings Shortcut
-        const SingleActivator(LogicalKeyboardKey.keyS, control: true, shift: true): () => appState.setTabIndex(appState.userRole == 'Super Admin' ? 4 : 6),
-        const SingleActivator(LogicalKeyboardKey.keyS, meta: true, shift: true): () => appState.setTabIndex(appState.userRole == 'Super Admin' ? 4 : 6),
+        // System Settings Shortcut (Program Coordinator only)
+        const SingleActivator(LogicalKeyboardKey.keyS, control: true, shift: true): () {
+          if (appState.userRole != 'Super Admin') appState.setTabIndex(6);
+        },
+        const SingleActivator(LogicalKeyboardKey.keyS, meta: true, shift: true): () {
+          if (appState.userRole != 'Super Admin') appState.setTabIndex(6);
+        },
         // Auto-Schedule Timings Shortcut
         const SingleActivator(LogicalKeyboardKey.keyH, control: true): () {
           appState.generateAutoSchedule();

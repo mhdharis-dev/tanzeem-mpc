@@ -21,7 +21,6 @@ class AppSidebar extends StatelessWidget {
             {'icon': Icons.domain_rounded, 'label': 'Madrasas Network'},
             {'icon': Icons.people_alt_outlined, 'label': 'Coordinators'},
             {'icon': Icons.analytics_outlined, 'label': 'Reports'},
-            {'icon': Icons.settings_outlined, 'label': 'Settings'},
           ]
         : [
             {'icon': Icons.grid_view_rounded, 'label': 'Dashboard'},
