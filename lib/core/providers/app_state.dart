@@ -1,0 +1,413 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../models/models.dart';
+import '../utils/dummy_data.dart';
+import '../utils/schedule_generator.dart';
+
+class AppState extends ChangeNotifier {
+  bool _isDarkMode = false;
+  bool get isDarkMode => _isDarkMode;
+
+  bool _isLoggedIn = false; // Starts on login page for role-based authentication
+  bool get isLoggedIn => _isLoggedIn;
+
+  int _activeTabIndex = 0;
+  int get activeTabIndex => _activeTabIndex;
+
+  String _userRole = 'Program Coordinator'; // 'Program Coordinator' or 'Super Admin'
+  String get userRole => _userRole;
+
+  String _userEmail = '';
+  String get userEmail => _userEmail;
+
+  bool _isSidebarCollapsed = false;
+  bool get isSidebarCollapsed => _isSidebarCollapsed;
+
+  String _searchQuery = '';
+  String get searchQuery => _searchQuery;
+
+  String _selectedClassFilter = 'All';
+  String get selectedClassFilter => _selectedClassFilter;
+
+  String _selectedCategoryFilter = 'All';
+  String get selectedCategoryFilter => _selectedCategoryFilter;
+
+  String _selectedStatusFilter = 'All';
+  String get selectedStatusFilter => _selectedStatusFilter;
+
+  // Data lists
+  late List<Program> _programs;
+  List<Program> get programs => _programs;
+
+  late List<Participant> _participants;
+  List<Participant> get participants => _participants;
+
+  late List<MadrasaModel> _madrasas;
+  List<MadrasaModel> get madrasas => _madrasas;
+
+  late List<NotificationItem> _notifications;
+  List<NotificationItem> get notifications => _notifications;
+
+  List<ScheduleSlot> _scheduleSlots = [];
+  List<ScheduleSlot> get scheduleSlots => _scheduleSlots;
+
+  // Live stage countdown state
+  int _liveStageProgramIndex = 0;
+  int get liveStageProgramIndex => _liveStageProgramIndex;
+
+  int _liveTimerRemainingSeconds = 12 * 60; // 12 minutes default
+  int get liveTimerRemainingSeconds => _liveTimerRemainingSeconds;
+
+  bool _isTimerRunning = false;
+  bool get isTimerRunning => _isTimerRunning;
+
+  Timer? _liveTimer;
+
+  // Settings state
+  String festivalName = 'Meelad Fest 2026 - Central Zone';
+  String madrasaName = 'Al-Azhar Central Academy';
+  TimeOfDay defaultStartTime = const TimeOfDay(hour: 8, minute: 30);
+  TimeOfDay dhuhrPrayerTime = const TimeOfDay(hour: 13, minute: 0);
+  TimeOfDay asrPrayerTime = const TimeOfDay(hour: 16, minute: 15);
+  int defaultDurationMinutes = 12;
+
+  AppState() {
+    _programs = List.from(DummyData.initialPrograms);
+    _participants = List.from(DummyData.initialParticipants);
+    _madrasas = List.from(DummyData.initialMadrasas);
+    _notifications = List.from(DummyData.initialNotifications);
+    
+    generateAutoSchedule();
+    _loadUserSession();
+  }
+
+  Future<void> _loadUserSession() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
+      _userEmail = prefs.getString('userEmail') ?? '';
+      _userRole = prefs.getString('userRole') ?? 'Program Coordinator';
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error loading user session: $e');
+    }
+  }
+
+  Future<void> _saveUserSession(bool loggedIn, String email, String role) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (loggedIn) {
+        await prefs.setBool('isLoggedIn', true);
+        await prefs.setString('userEmail', email);
+        await prefs.setString('userRole', role);
+      } else {
+        await prefs.remove('isLoggedIn');
+        await prefs.remove('userEmail');
+        await prefs.remove('userRole');
+      }
+    } catch (e) {
+      debugPrint('Error saving user session: $e');
+    }
+  }
+
+  void toggleTheme() {
+    _isDarkMode = !_isDarkMode;
+    notifyListeners();
+  }
+
+  void toggleSidebar() {
+    _isSidebarCollapsed = !_isSidebarCollapsed;
+    notifyListeners();
+  }
+
+  void setTabIndex(int index) {
+    _activeTabIndex = index;
+    notifyListeners();
+  }
+
+  Future<bool> login(String email, String password) async {
+    final cleanEmail = email.trim().toLowerCase();
+    
+    // 1. Super Admin Firestore Verification ('admin' collection document / query)
+    try {
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection('admin')
+          .where('email', isEqualTo: cleanEmail)
+          .where('password', isEqualTo: password)
+          .get();
+
+      if (querySnapshot.docs.isNotEmpty) {
+        _userRole = 'Super Admin';
+        _userEmail = cleanEmail;
+        _isLoggedIn = true;
+        _activeTabIndex = 0;
+        await _saveUserSession(true, _userEmail, _userRole);
+        notifyListeners();
+        return true;
+      }
+
+      final docSnapshot = await FirebaseFirestore.instance.collection('admin').doc('admin').get();
+      if (docSnapshot.exists) {
+        final data = docSnapshot.data();
+        if (data != null) {
+          final docEmail = (data['email'] ?? '').toString().trim().toLowerCase();
+          final docPassword = (data['password'] ?? '').toString();
+          if (docEmail == cleanEmail && docPassword == password) {
+            _userRole = 'Super Admin';
+            _userEmail = cleanEmail;
+            _isLoggedIn = true;
+            _activeTabIndex = 0;
+            await _saveUserSession(true, _userEmail, _userRole);
+            notifyListeners();
+            return true;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Firestore Admin Auth check error: $e');
+    }
+
+    // Static fallback check if Firestore is offline
+    if (cleanEmail == 'admin@haris.tanzeem' && password == 'tanzeem@admin') {
+      _userRole = 'Super Admin';
+      _userEmail = cleanEmail;
+      _isLoggedIn = true;
+      _activeTabIndex = 0;
+      await _saveUserSession(true, _userEmail, _userRole);
+      notifyListeners();
+      return true;
+    }
+    
+    // 2. Program Coordinator Authentication (.tanzeem or .thanzeem, password length >= 6)
+    if ((cleanEmail.endsWith('.tanzeem') || cleanEmail.endsWith('.thanzeem')) && password.length >= 6) {
+      _userRole = 'Program Coordinator';
+      _userEmail = cleanEmail;
+      _isLoggedIn = true;
+      _activeTabIndex = 0;
+      await _saveUserSession(true, _userEmail, _userRole);
+      notifyListeners();
+      return true;
+    }
+
+    return false;
+  }
+
+  void logout() {
+    _isLoggedIn = false;
+    _userEmail = '';
+    _activeTabIndex = 0;
+    _saveUserSession(false, '', '');
+    notifyListeners();
+  }
+
+  void setSearchQuery(String query) {
+    _searchQuery = query;
+    notifyListeners();
+  }
+
+  void setClassFilter(String val) {
+    _selectedClassFilter = val;
+    notifyListeners();
+  }
+
+  void setCategoryFilter(String val) {
+    _selectedCategoryFilter = val;
+    notifyListeners();
+  }
+
+  void setStatusFilter(String val) {
+    _selectedStatusFilter = val;
+    notifyListeners();
+  }
+
+  // Program Management CRUD & Actions
+  void addProgram(Program newProg) {
+    _programs.add(newProg);
+    // Add corresponding participant
+    _participants.add(Participant(
+      id: 'part-${newProg.id}',
+      name: newProg.studentName,
+      photoUrl: newProg.studentPhoto,
+      studentClass: newProg.studentClass,
+      category: newProg.category,
+      item: newProg.item,
+      teacher: newProg.teacher,
+      madrasaName: madrasaName,
+      status: 'Scheduled',
+    ));
+    generateAutoSchedule();
+    notifyListeners();
+  }
+
+  void updateProgramStatus(String id, ProgramStatus newStatus) {
+    int idx = _programs.indexWhere((p) => p.id == id);
+    if (idx != -1) {
+      _programs[idx].status = newStatus;
+      if (newStatus == ProgramStatus.live) {
+        _liveStageProgramIndex = idx;
+        _liveTimerRemainingSeconds = _programs[idx].durationMinutes * 60;
+        startLiveTimer();
+      }
+      notifyListeners();
+    }
+  }
+
+  void deleteProgram(String id) {
+    _programs.removeWhere((p) => p.id == id);
+    generateAutoSchedule();
+    notifyListeners();
+  }
+
+  void reorderProgram(int oldIndex, int newIndex) {
+    if (newIndex > oldIndex) newIndex -= 1;
+    final item = _programs.removeAt(oldIndex);
+    _programs.insert(newIndex, item);
+    generateAutoSchedule();
+    notifyListeners();
+  }
+
+  // Automatic Schedule Generation
+  void generateAutoSchedule() {
+    _scheduleSlots = ScheduleGenerator.generateSchedule(
+      programs: _programs,
+      startTime: defaultStartTime,
+      dhuhrTime: dhuhrPrayerTime,
+      asrTime: asrPrayerTime,
+      breakDurationMins: 15,
+      dhuhrDurationMins: 45,
+    );
+    notifyListeners();
+  }
+
+  // Live Timer Controls
+  void startLiveTimer() {
+    _isTimerRunning = true;
+    _liveTimer?.cancel();
+    _liveTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (_liveTimerRemainingSeconds > 0) {
+        _liveTimerRemainingSeconds--;
+        notifyListeners();
+      } else {
+        _isTimerRunning = false;
+        t.cancel();
+        notifyListeners();
+      }
+    });
+    notifyListeners();
+  }
+
+  void pauseLiveTimer() {
+    _isTimerRunning = false;
+    _liveTimer?.cancel();
+    notifyListeners();
+  }
+
+  void nextLiveProgram() {
+    if (_liveStageProgramIndex < _programs.length - 1) {
+      _programs[_liveStageProgramIndex].status = ProgramStatus.completed;
+      _liveStageProgramIndex++;
+      _programs[_liveStageProgramIndex].status = ProgramStatus.live;
+      _liveTimerRemainingSeconds = _programs[_liveStageProgramIndex].durationMinutes * 60;
+      startLiveTimer();
+      notifyListeners();
+    }
+  }
+
+  void prevLiveProgram() {
+    if (_liveStageProgramIndex > 0) {
+      _liveStageProgramIndex--;
+      _liveTimerRemainingSeconds = _programs[_liveStageProgramIndex].durationMinutes * 60;
+      notifyListeners();
+    }
+  }
+
+  void addNotification(String title, String message, String type) {
+    _notifications.insert(
+      0,
+      NotificationItem(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        title: title,
+        message: message,
+        timestamp: 'Just now',
+        type: type,
+      ),
+    );
+    notifyListeners();
+  }
+
+  void markNotificationAsRead(String id) {
+    int idx = _notifications.indexWhere((n) => n.id == id);
+    if (idx != -1) {
+      _notifications[idx].isRead = true;
+      notifyListeners();
+    }
+  }
+
+  // Madrasa Network CRUD Operations (with Cloud Firestore sync)
+  void addMadrasa(MadrasaModel newMadrasa) {
+    _madrasas.add(newMadrasa);
+    addNotification('Madrasa Registered', '${newMadrasa.madrasaName} registered to Tanzeem Network.', 'system');
+    notifyListeners();
+
+    try {
+      FirebaseFirestore.instance.collection('madrasa').doc(newMadrasa.madrasaId).set(newMadrasa.toMap());
+    } catch (e) {
+      debugPrint('Firestore addMadrasa error: $e');
+    }
+  }
+
+  void updateMadrasa(MadrasaModel updatedMadrasa) {
+    int idx = _madrasas.indexWhere((m) => m.madrasaId == updatedMadrasa.madrasaId);
+    if (idx != -1) {
+      _madrasas[idx] = updatedMadrasa;
+      addNotification('Madrasa Updated', '${updatedMadrasa.madrasaName} details updated.', 'system');
+      notifyListeners();
+
+      try {
+        FirebaseFirestore.instance.collection('madrasa').doc(updatedMadrasa.madrasaId).set(updatedMadrasa.toMap(), SetOptions(merge: true));
+      } catch (e) {
+        debugPrint('Firestore updateMadrasa error: $e');
+      }
+    }
+  }
+
+  void deleteMadrasa(String id) {
+    int idx = _madrasas.indexWhere((m) => m.madrasaId == id);
+    if (idx != -1) {
+      final name = _madrasas[idx].madrasaName;
+      _madrasas.removeAt(idx);
+      addNotification('Madrasa Removed', '$name was removed from Tanzeem Network.', 'system');
+      notifyListeners();
+
+      try {
+        FirebaseFirestore.instance.collection('madrasa').doc(id).delete();
+      } catch (e) {
+        debugPrint('Firestore deleteMadrasa error: $e');
+      }
+    }
+  }
+
+  // Filtered Programs Getter
+  List<Program> get filteredPrograms {
+    return _programs.where((p) {
+      bool matchesSearch = p.studentName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+          p.item.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+          p.number.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+          p.category.toLowerCase().contains(_searchQuery.toLowerCase());
+
+      bool matchesClass = _selectedClassFilter == 'All' || p.studentClass == _selectedClassFilter;
+      bool matchesCategory = _selectedCategoryFilter == 'All' || p.category.startsWith(_selectedCategoryFilter);
+      bool matchesStatus = _selectedStatusFilter == 'All' || p.status.name.toLowerCase() == _selectedStatusFilter.toLowerCase();
+
+      return matchesSearch && matchesClass && matchesCategory && matchesStatus;
+    }).toList();
+  }
+
+  @override
+  void dispose() {
+    _liveTimer?.cancel();
+    super.dispose();
+  }
+}
