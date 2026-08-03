@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:intl/intl.dart';
 import '../models/models.dart';
 import '../utils/dummy_data.dart';
 import '../utils/schedule_generator.dart';
@@ -21,6 +22,9 @@ class AppState extends ChangeNotifier {
 
   String _userEmail = '';
   String get userEmail => _userEmail;
+
+  String _madrasaId = '7020@tanzeem';
+  String get madrasaId => _madrasaId;
 
   bool _isSidebarCollapsed = false;
   bool get isSidebarCollapsed => _isSidebarCollapsed;
@@ -46,6 +50,12 @@ class AppState extends ChangeNotifier {
 
   late List<MadrasaModel> _madrasas;
   List<MadrasaModel> get madrasas => _madrasas;
+
+  List<ParticipantModel> _realParticipants = [];
+  List<ParticipantModel> get realParticipants => _realParticipants;
+
+  List<ProgramModel> _realPrograms = [];
+  List<ProgramModel> get realPrograms => _realPrograms;
 
   late List<NotificationItem> _notifications;
   List<NotificationItem> get notifications => _notifications;
@@ -80,6 +90,8 @@ class AppState extends ChangeNotifier {
     _notifications = List.from(DummyData.initialNotifications);
 
     _fetchMadrasasFromFirestore();
+    _fetchParticipantsFromFirestore();
+    _fetchProgramsFromFirestore();
     generateAutoSchedule();
     _loadUserSession();
   }
@@ -97,29 +109,271 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  void _fetchParticipantsFromFirestore() {
+    try {
+      FirebaseFirestore.instance.collectionGroup('participants').snapshots().listen((snapshot) {
+        _realParticipants = snapshot.docs.map((doc) => ParticipantModel.fromSnapshot(doc)).toList();
+        notifyListeners();
+      }, onError: (e) {
+        debugPrint('Firestore _fetchParticipantsFromFirestore group stream error: $e');
+      });
+    } catch (e) {
+      debugPrint('Firestore group stream init error: $e');
+    }
+  }
+
+  void _fetchProgramsFromFirestore() {
+    try {
+      FirebaseFirestore.instance.collectionGroup('programs').snapshots().listen((snapshot) {
+        _realPrograms = snapshot.docs.map((doc) => ProgramModel.fromSnapshot(doc)).toList();
+        notifyListeners();
+      }, onError: (e) {
+        debugPrint('Firestore _fetchProgramsFromFirestore group stream error: $e');
+      });
+    } catch (e) {
+      debugPrint('Firestore group stream init error: $e');
+    }
+  }
+
+  Future<bool> addParticipantToFirestore(ParticipantModel participant) async {
+    try {
+      final docRef = FirebaseFirestore.instance
+          .collection('madrasa')
+          .doc(participant.madrasaId)
+          .collection('participants')
+          .doc(participant.participantId);
+
+      await docRef.set(participant.toMap());
+
+      if (!_realParticipants.any((p) => p.participantId == participant.participantId)) {
+        _realParticipants.add(participant);
+        notifyListeners();
+      }
+      return true;
+    } catch (e) {
+      debugPrint('Error adding participant to Firestore: $e');
+      return false;
+    }
+  }
+
+  Future<bool> addProgramToFirestore(ProgramModel program) async {
+    try {
+      final docRef = FirebaseFirestore.instance
+          .collection('madrasa')
+          .doc(program.madrasaId)
+          .collection('programs')
+          .doc(program.programId);
+
+      await docRef.set(program.toMap());
+
+      final idx = _realPrograms.indexWhere((p) => p.programId == program.programId);
+      if (idx >= 0) {
+        _realPrograms[idx] = program;
+      } else {
+        _realPrograms.add(program);
+      }
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error adding program to Firestore: $e');
+      return false;
+    }
+  }
+
+  Future<bool> updateProgramInFirestore(ProgramModel program) async {
+    return addProgramToFirestore(program);
+  }
+
+  Future<bool> deleteProgramFromFirestore(String programId, String madrasaId) async {
+    try {
+      final mId = madrasaId.isEmpty ? _madrasaId : madrasaId;
+      await FirebaseFirestore.instance
+          .collection('madrasa')
+          .doc(mId)
+          .collection('programs')
+          .doc(programId)
+          .delete();
+
+      _realPrograms.removeWhere((p) => p.programId == programId);
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error deleting program from Firestore: $e');
+      return false;
+    }
+  }
+
+  Future<bool> startProgramLiveInFirestore(String targetProgramId, String madrasaId) async {
+    try {
+      final mId = madrasaId.isEmpty ? _madrasaId : madrasaId;
+      final now = DateTime.now();
+      final timeStr = DateFormat('HH:mm:ss').format(now);
+      final batch = FirebaseFirestore.instance.batch();
+
+      // Stop any other currently live program
+      for (final prog in _realPrograms) {
+        if (prog.status.toLowerCase() == 'live' && prog.programId != targetProgramId) {
+          final ref = FirebaseFirestore.instance
+              .collection('madrasa')
+              .doc(mId)
+              .collection('programs')
+              .doc(prog.programId);
+
+          batch.update(ref, {
+            'status': 'completed',
+            'endTime': timeStr,
+          });
+        }
+      }
+
+      final targetRef = FirebaseFirestore.instance
+          .collection('madrasa')
+          .doc(mId)
+          .collection('programs')
+          .doc(targetProgramId);
+
+      batch.update(targetRef, {
+        'status': 'live',
+        'startTime': timeStr,
+      });
+
+      await batch.commit();
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error starting live program: $e');
+      return false;
+    }
+  }
+
+  Future<bool> stopProgramLiveInFirestore(String targetProgramId, String madrasaId) async {
+    try {
+      final mId = madrasaId.isEmpty ? _madrasaId : madrasaId;
+      final now = DateTime.now();
+      final endTimeStr = DateFormat('HH:mm:ss').format(now);
+
+      final progIdx = _realPrograms.indexWhere((p) => p.programId == targetProgramId);
+      String calculatedDuration = '50 sec';
+
+      if (progIdx >= 0) {
+        final prog = _realPrograms[progIdx];
+        if (prog.startTime.isNotEmpty && prog.startTime != 'TBD') {
+          try {
+            DateTime? parsedStart;
+            try {
+              final t = DateFormat('HH:mm:ss').parse(prog.startTime);
+              parsedStart = DateTime(now.year, now.month, now.day, t.hour, t.minute, t.second);
+            } catch (_) {
+              final t = DateFormat('hh:mm a').parse(prog.startTime);
+              parsedStart = DateTime(now.year, now.month, now.day, t.hour, t.minute);
+            }
+
+            final diffSeconds = now.difference(parsedStart).inSeconds;
+            if (diffSeconds > 0) {
+              calculatedDuration = ProgramModel.formatSecondsToDuration(diffSeconds);
+            }
+          } catch (e) {
+            debugPrint('Error calculating exact duration: $e');
+          }
+        }
+      }
+
+      final targetRef = FirebaseFirestore.instance
+          .collection('madrasa')
+          .doc(mId)
+          .collection('programs')
+          .doc(targetProgramId);
+
+      await targetRef.update({
+        'status': 'completed',
+        'endTime': endTimeStr,
+        'duration': calculatedDuration,
+      });
+
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error stopping live program: $e');
+      return false;
+    }
+  }
+
+  Future<bool> cancelProgramInFirestore(String targetProgramId, String madrasaId) async {
+    try {
+      final mId = madrasaId.isEmpty ? _madrasaId : madrasaId;
+      final targetRef = FirebaseFirestore.instance
+          .collection('madrasa')
+          .doc(mId)
+          .collection('programs')
+          .doc(targetProgramId);
+
+      await targetRef.update({
+        'status': 'cancelled',
+      });
+
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error cancelling program: $e');
+      return false;
+    }
+  }
+
+  Future<void> recalculateProgramOrdersInFirestore() async {
+    try {
+      final batch = FirebaseFirestore.instance.batch();
+      for (int i = 0; i < _realPrograms.length; i++) {
+        final prog = _realPrograms[i];
+        final newOrder = i + 1;
+        if (prog.order != newOrder) {
+          final ref = FirebaseFirestore.instance
+              .collection('madrasa')
+              .doc(prog.madrasaId.isEmpty ? _madrasaId : prog.madrasaId)
+              .collection('programs')
+              .doc(prog.programId);
+          batch.update(ref, {'order': newOrder});
+        }
+      }
+      await batch.commit();
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error recalculating program orders: $e');
+    }
+  }
+
+  Future<bool> setSingleProgramLiveInFirestore(String targetProgramId, String madrasaId) async {
+    return startProgramLiveInFirestore(targetProgramId, madrasaId);
+  }
+
   Future<void> _loadUserSession() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       _isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
       _userEmail = prefs.getString('userEmail') ?? '';
       _userRole = prefs.getString('userRole') ?? 'Program Coordinator';
+      _madrasaId = prefs.getString('madrasaId') ?? '7020@tanzeem';
+      madrasaName = prefs.getString('madrasaName') ?? 'Tanzeem Central Institute';
       notifyListeners();
     } catch (e) {
       debugPrint('Error loading user session: $e');
     }
   }
 
-  Future<void> _saveUserSession(bool loggedIn, String email, String role) async {
+  Future<void> _saveUserSession(bool loggedIn, String email, String role, {String? madrasaId, String? name}) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       if (loggedIn) {
         await prefs.setBool('isLoggedIn', true);
         await prefs.setString('userEmail', email);
         await prefs.setString('userRole', role);
+        if (madrasaId != null) await prefs.setString('madrasaId', madrasaId);
+        if (name != null) await prefs.setString('madrasaName', name);
       } else {
         await prefs.remove('isLoggedIn');
         await prefs.remove('userEmail');
         await prefs.remove('userRole');
+        await prefs.remove('madrasaId');
+        await prefs.remove('madrasaName');
       }
     } catch (e) {
       debugPrint('Error saving user session: $e');
@@ -210,10 +464,11 @@ class AppState extends ChangeNotifier {
         _userEmail = cleanEmail;
         _isLoggedIn = true;
         _activeTabIndex = 0;
+        _madrasaId = madrasa.madrasaId;
         madrasaName = madrasa.madrasaName;
 
         updateMadrasaOnlineStatus(cleanEmail, true);
-        await _saveUserSession(true, _userEmail, _userRole);
+        await _saveUserSession(true, _userEmail, _userRole, madrasaId: _madrasaId, name: madrasaName);
         notifyListeners();
         return true;
       }
@@ -231,10 +486,11 @@ class AppState extends ChangeNotifier {
       _userEmail = cleanEmail;
       _isLoggedIn = true;
       _activeTabIndex = 0;
+      _madrasaId = madrasa.madrasaId;
       madrasaName = madrasa.madrasaName;
 
       updateMadrasaOnlineStatus(cleanEmail, true);
-      await _saveUserSession(true, _userEmail, _userRole);
+      await _saveUserSession(true, _userEmail, _userRole, madrasaId: _madrasaId, name: madrasaName);
       notifyListeners();
       return true;
     }
@@ -292,6 +548,11 @@ class AppState extends ChangeNotifier {
   }
 
   // Program Management CRUD & Actions
+  void addParticipant(Participant participant) {
+    _participants.add(participant);
+    notifyListeners();
+  }
+
   void addProgram(Program newProg) {
     _programs.add(newProg);
     // Add corresponding participant
