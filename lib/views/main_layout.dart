@@ -15,6 +15,7 @@ import 'live_stage/live_stage_screen.dart';
 import 'participants/participants_screen.dart';
 import 'super_admin/super_admin_screen.dart';
 import 'super_admin/coordinators_screen.dart';
+import 'coordination/mark_coordination_screen.dart';
 import 'reports/reports_screen.dart';
 import 'settings/settings_screen.dart';
 
@@ -33,6 +34,7 @@ class MainLayout extends StatelessWidget {
             const DashboardScreen(),
             const SuperAdminScreen(),
             const CoordinatorsScreen(),
+            const MarkCoordinationScreen(),
             const ReportsScreen(),
           ]
         : [
@@ -41,6 +43,7 @@ class MainLayout extends StatelessWidget {
             const ScheduleScreen(),
             const LiveStageScreen(),
             const ParticipantsScreen(),
+            const MarkCoordinationScreen(),
             const ReportsScreen(),
             const SettingsScreen(),
           ];

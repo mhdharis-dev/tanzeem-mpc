@@ -20,6 +20,7 @@ class AppSidebar extends StatelessWidget {
             {'icon': Icons.grid_view_rounded, 'label': 'Dashboard'},
             {'icon': Icons.domain_rounded, 'label': 'Madrasas Network'},
             {'icon': Icons.people_alt_outlined, 'label': 'Coordinators'},
+            {'icon': Icons.grade_rounded, 'label': 'Mark Coordination'},
             {'icon': Icons.analytics_outlined, 'label': 'Reports'},
           ]
         : [
@@ -28,6 +29,7 @@ class AppSidebar extends StatelessWidget {
             {'icon': Icons.event_note_rounded, 'label': 'Schedule'},
             {'icon': Icons.live_tv_rounded, 'label': 'Live Stage'},
             {'icon': Icons.people_alt_outlined, 'label': 'Participants'},
+            {'icon': Icons.grade_rounded, 'label': 'Mark Coordination'},
             {'icon': Icons.analytics_outlined, 'label': 'Reports'},
             {'icon': Icons.settings_outlined, 'label': 'Settings'},
           ];
