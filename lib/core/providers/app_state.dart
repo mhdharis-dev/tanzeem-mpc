@@ -67,7 +67,7 @@ class AppState extends ChangeNotifier {
 
   // Settings state
   String festivalName = 'Meelad Fest 2026 - Central Zone';
-  String madrasaName = 'Al-Azhar Central Academy';
+  String madrasaName = 'Tanzeem Central Institute';
   TimeOfDay defaultStartTime = const TimeOfDay(hour: 8, minute: 30);
   TimeOfDay dhuhrPrayerTime = const TimeOfDay(hour: 13, minute: 0);
   TimeOfDay asrPrayerTime = const TimeOfDay(hour: 16, minute: 15);

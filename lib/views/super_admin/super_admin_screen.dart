@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../core/models/madrasa_model.dart';
 import '../../core/providers/app_state.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/whatsapp_helper.dart';
 import '../widgets/glass_card.dart';
 
 class SuperAdminScreen extends StatelessWidget {
@@ -357,12 +358,18 @@ class SuperAdminScreen extends StatelessWidget {
                             appState.updateMadrasa(newMadrasa);
                           } else {
                             appState.addMadrasa(newMadrasa);
+                            if (newMadrasa.coordinatorPhone.isNotEmpty) {
+                              WhatsAppHelper.sendMadrasaRegistrationWelcomeMsg(
+                                context: context,
+                                madrasa: newMadrasa,
+                              );
+                            }
                           }
 
                           Navigator.of(bottomSheetContext).pop();
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text(isEditing ? 'Madrasa updated successfully!' : 'New Madrasa registered successfully!'),
+                              content: Text(isEditing ? 'Madrasa updated successfully!' : 'New Madrasa registered & WhatsApp welcome message sent!'),
                               backgroundColor: AppColors.success,
                             ),
                           );
@@ -473,7 +480,7 @@ class SuperAdminScreen extends StatelessWidget {
                           const SizedBox(height: 10),
                           _buildDetailCard(context, 'Coordinator Name', m.coordinatorName, Icons.person_outline_rounded, isDark),
                           const SizedBox(height: 10),
-                          _buildDetailCard(context, 'Coordinator Phone', m.coordinatorPhone, Icons.phone_outlined, isDark),
+                          _buildDetailCard(context, 'Coordinator Phone', m.coordinatorPhone, Icons.phone_outlined, isDark, isPhone: true),
                           const SizedBox(height: 10),
                           _buildDetailCard(context, 'Portal Email', m.email, Icons.email_outlined, isDark),
                           const SizedBox(height: 10),
@@ -551,7 +558,7 @@ class SuperAdminScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildDetailCard(BuildContext context, String label, String value, IconData icon, bool isDark) {
+  Widget _buildDetailCard(BuildContext context, String label, String value, IconData icon, bool isDark, {bool isPhone = false}) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -577,6 +584,12 @@ class SuperAdminScreen extends StatelessWidget {
               ],
             ),
           ),
+          if (isPhone && value.isNotEmpty && value != 'N/A')
+            IconButton(
+              icon: const Icon(Icons.chat_bubble_rounded, size: 18, color: Color(0xFF25D366)),
+              onPressed: () => WhatsAppHelper.openWhatsAppChat(context: context, phone: value),
+              tooltip: 'Send WhatsApp Message',
+            ),
           IconButton(
             icon: const Icon(Icons.copy_rounded, size: 18, color: AppColors.primary),
             onPressed: () {
@@ -652,7 +665,7 @@ class SuperAdminScreen extends StatelessWidget {
                 maxCrossAxisExtent: 420,
                 mainAxisSpacing: 20,
                 crossAxisSpacing: 20,
-                childAspectRatio: 1.6,
+                mainAxisExtent: 210,
               ),
               itemCount: appState.madrasas.length,
               itemBuilder: (context, idx) {
