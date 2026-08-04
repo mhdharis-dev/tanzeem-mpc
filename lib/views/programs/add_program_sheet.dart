@@ -22,19 +22,25 @@ class AddProgramSheet extends StatefulWidget {
 }
 
 class _AddProgramSheetState extends State<AddProgramSheet> {
-  late String _programType; // 'single', 'group', 'other'
+  late String _programType; // 'single', 'group'
+  String _editingStatus = 'pending';
 
   // Selected Participant state for 'single'
   ParticipantModel? _selectedParticipant;
   String _participantSearchQuery = '';
 
-  // Selected Program Names and Per-Program Durations Map
+  // Selected Group Participants state for 'group'
+  final List<ParticipantModel> _selectedGroupParticipants = [];
+  int _groupDuration = 15;
+  final TextEditingController _groupProgramNameController = TextEditingController(text: 'DAFFA SONG');
+
+  // Selected Program Names and Per-Program Durations Map for 'single'
   final List<String> _selectedProgramNames = ['MEELAD SONG'];
   final Map<String, int> _programDurations = {'MEELAD SONG': 10};
 
   final TextEditingController _customProgramNameController = TextEditingController();
 
-  // Preset Suggestions
+  // Preset Suggestions for Single Items
   final List<String> _presetSingleItems = [
     'MEELAD SONG',
     'QIRA\'AT RECITATION',
@@ -45,6 +51,17 @@ class _AddProgramSheetState extends State<AddProgramSheet> {
     'CALLIGRAPHY',
   ];
 
+  // Preset Suggestions for Group Items
+  final List<String> _presetGroupItems = [
+    'DAFFA SONG',
+    'GROUP SONG',
+    'KOLKALI',
+    'DUFF MUTA',
+    'BURDA RECITATION',
+    'MAWLID SINGING',
+    'GROUP DRAMA',
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -53,28 +70,56 @@ class _AddProgramSheetState extends State<AddProgramSheet> {
     if (widget.programToEdit != null) {
       final prog = widget.programToEdit!;
       _programType = prog.programType.toLowerCase();
+      _editingStatus = prog.status.toLowerCase();
       _selectedProgramNames.clear();
       _selectedProgramNames.add(prog.programName);
       final initialDur = int.tryParse(prog.duration.split(' ')[0]) ?? 10;
       _programDurations[prog.programName] = initialDur;
-      _selectedParticipant = ParticipantModel(
-        participantId: prog.participantId,
-        name: prog.participantName,
-        studentClass: prog.studentClass,
-        gender: 'Male',
-        division: prog.division,
-        category: prog.category,
-        parentName: '',
-        phoneNo: '',
-        madrasaId: prog.madrasaId,
-        createdAt: prog.createdAt,
-      );
+      _groupDuration = initialDur;
+      _groupProgramNameController.text = prog.programName;
+
+      if (_programType == 'group') {
+        final names = prog.participantName.split(', ');
+        final ids = prog.participantId.split(', ');
+        _selectedGroupParticipants.clear();
+        for (int i = 0; i < names.length; i++) {
+          final pId = i < ids.length ? ids[i] : 'PATC-00${i + 1}';
+          _selectedGroupParticipants.add(
+            ParticipantModel(
+              participantId: pId,
+              name: names[i],
+              studentClass: prog.studentClass,
+              gender: 'Male',
+              division: prog.division,
+              category: prog.category,
+              parentName: '',
+              phoneNo: '',
+              madrasaId: prog.madrasaId,
+              createdAt: prog.createdAt,
+            ),
+          );
+        }
+      } else {
+        _selectedParticipant = ParticipantModel(
+          participantId: prog.participantId,
+          name: prog.participantName,
+          studentClass: prog.studentClass,
+          gender: 'Male',
+          division: prog.division,
+          category: prog.category,
+          parentName: '',
+          phoneNo: '',
+          madrasaId: prog.madrasaId,
+          createdAt: prog.createdAt,
+        );
+      }
     }
   }
 
   @override
   void dispose() {
     _customProgramNameController.dispose();
+    _groupProgramNameController.dispose();
     super.dispose();
   }
 
@@ -83,7 +128,7 @@ class _AddProgramSheetState extends State<AddProgramSheet> {
     if (clean.isNotEmpty && !_selectedProgramNames.contains(clean)) {
       setState(() {
         _selectedProgramNames.add(clean);
-        _programDurations[clean] = 10; // Default rough duration 10 mins
+        _programDurations[clean] = 10;
         _customProgramNameController.clear();
       });
     }
@@ -184,7 +229,7 @@ class _AddProgramSheetState extends State<AddProgramSheet> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Register Meelad Program',
+                        _programType == 'group' ? 'Register Group Program' : 'Register Meelad Program',
                         style: GoogleFonts.poppins(
                           fontWeight: FontWeight.bold,
                           fontSize: 18,
@@ -192,7 +237,9 @@ class _AddProgramSheetState extends State<AddProgramSheet> {
                         ),
                       ),
                       Text(
-                        'Register participant performance details for festival schedule.',
+                        _programType == 'group'
+                            ? 'Select 2 or more participants for a single group item performance.'
+                            : 'Register participant performance details for festival schedule.',
                         style: GoogleFonts.poppins(fontSize: 12, color: isDark ? AppColors.subtextLight : AppColors.subtextDark),
                       ),
                     ],
@@ -206,8 +253,6 @@ class _AddProgramSheetState extends State<AddProgramSheet> {
             ),
             const SizedBox(height: 16),
 
-            const SizedBox(height: 8),
-
             Expanded(
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
@@ -216,7 +261,7 @@ class _AddProgramSheetState extends State<AddProgramSheet> {
                   children: [
                     if (_programType == 'single') ...[
                       // -------------------------------------------------------------
-                      // CASE 1: SINGLE (1 Student)
+                      // CASE 1: SINGLE (1 Student, Multiple Programs)
                       // -------------------------------------------------------------
                       Text(
                         'Select Participant',
@@ -258,7 +303,7 @@ class _AddProgramSheetState extends State<AddProgramSheet> {
                               ),
                             ),
 
-                            // Real Firestore Participant Results List (shows when searching or selecting)
+                            // Real Firestore Participant Results List
                             if (_selectedParticipant == null && matchingParticipants.isNotEmpty) ...[
                               const Divider(height: 1),
                               Container(
@@ -290,7 +335,6 @@ class _AddProgramSheetState extends State<AddProgramSheet> {
 
                       if (_selectedParticipant != null) ...[
                         const SizedBox(height: 12),
-                        // Auto-set Auto populated details badge
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
@@ -321,16 +365,13 @@ class _AddProgramSheetState extends State<AddProgramSheet> {
 
                       const SizedBox(height: 22),
 
-                      // -------------------------------------------------------------
-                      // PROGRAM NAMES CHIP INPUT UI (EXACT LAYOUT FROM DESIGN IMAGE)
-                      // -------------------------------------------------------------
+                      // Program Names Chip Input UI
                       Text(
                         'Program Names',
                         style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 14, color: isDark ? AppColors.textLight : AppColors.textDark),
                       ),
                       const SizedBox(height: 10),
 
-                      // 1. Selected Chips Display Row (Top)
                       if (_selectedProgramNames.isNotEmpty) ...[
                         Wrap(
                           spacing: 8,
@@ -374,7 +415,6 @@ class _AddProgramSheetState extends State<AddProgramSheet> {
                         const SizedBox(height: 14),
                       ],
 
-                      // 2. Input Box with Blue 'Add' Button (Middle)
                       Row(
                         children: [
                           Expanded(
@@ -418,7 +458,6 @@ class _AddProgramSheetState extends State<AddProgramSheet> {
 
                       const SizedBox(height: 16),
 
-                      // 3. Suggestions Row (Bottom)
                       Text(
                         'Suggestions',
                         style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? AppColors.subtextLight : AppColors.subtextDark),
@@ -472,11 +511,8 @@ class _AddProgramSheetState extends State<AddProgramSheet> {
                         }).toList(),
                       ),
 
-                      const SizedBox(height: 22),
+                        const SizedBox(height: 22),
 
-                      // -------------------------------------------------------------
-                      // SET EACH PROGRAM'S DURATION UI
-                      // -------------------------------------------------------------
                       Text(
                         'Set Each Program\'s Duration (Minutes)',
                         style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: isDark ? AppColors.textLight : AppColors.textDark),
@@ -551,24 +587,277 @@ class _AddProgramSheetState extends State<AddProgramSheet> {
                         },
                       ),
                     ] else if (_programType == 'group') ...[
-                      // CASE 2: GROUP (2 or more students)
-                      Padding(
-                        padding: const EdgeInsets.all(20.0),
-                        child: Center(
-                          child: Text(
-                            'Group Program Addition Mode Selected (2+ Students).',
-                            style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.secondary),
+                      // -------------------------------------------------------------
+                      // CASE 2: GROUP PROGRAM (Multiple Students, 1 Program Name)
+                      // -------------------------------------------------------------
+                      Text(
+                        'Select Group Participants (2 or more)',
+                        style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 13, color: isDark ? AppColors.textLight : AppColors.textDark),
+                      ),
+                      const SizedBox(height: 6),
+
+                      // Group Student Search & Selection Box
+                      Container(
+                        decoration: BoxDecoration(
+                          color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                        ),
+                        child: Column(
+                          children: [
+                            TextField(
+                              onChanged: (val) => setState(() => _participantSearchQuery = val),
+                              decoration: InputDecoration(
+                                hintText: 'Search & add student to group...',
+                                hintStyle: GoogleFonts.poppins(fontSize: 12, color: isDark ? AppColors.subtextLight : AppColors.subtextDark),
+                                prefixIcon: const Icon(Icons.group_add_rounded, size: 20, color: AppColors.secondary),
+                                border: InputBorder.none,
+                                contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+                              ),
+                            ),
+
+                            if (matchingParticipants.isNotEmpty) ...[
+                              const Divider(height: 1),
+                              Container(
+                                constraints: const BoxConstraints(maxHeight: 160),
+                                child: ListView.separated(
+                                  shrinkWrap: true,
+                                  itemCount: matchingParticipants.length,
+                                  separatorBuilder: (_, _) => const Divider(height: 1, color: Colors.white10),
+                                  itemBuilder: (context, idx) {
+                                    final p = matchingParticipants[idx];
+                                    final isAlreadyInGroup = _selectedGroupParticipants.any((gp) => gp.participantId == p.participantId);
+                                    return ListTile(
+                                      dense: true,
+                                      title: Text(p.name, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: isDark ? AppColors.textLight : AppColors.textDark)),
+                                      subtitle: Text('${p.studentClass} (Div ${p.division}) • ${p.category} • ${p.participantId}', style: GoogleFonts.poppins(fontSize: 11, color: AppColors.secondary)),
+                                      trailing: isAlreadyInGroup
+                                          ? const Icon(Icons.check_circle_rounded, size: 18, color: AppColors.success)
+                                          : const Icon(Icons.add_circle_outline_rounded, size: 18, color: AppColors.secondary),
+                                      onTap: () {
+                                        if (!isAlreadyInGroup) {
+                                          setState(() {
+                                            _selectedGroupParticipants.add(p);
+                                          });
+                                        }
+                                      },
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      // Selected Group Participants Tag Chips Display
+                      if (_selectedGroupParticipants.isNotEmpty) ...[
+                        Text(
+                          'Selected Group Members (${_selectedGroupParticipants.length}):',
+                          style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.secondary),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: _selectedGroupParticipants.map((gp) {
+                            return Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: AppColors.secondary.withAlpha(20),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: AppColors.secondary.withAlpha(80)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    '${gp.name} (${gp.studentClass}-${gp.division})',
+                                    style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: isDark ? AppColors.textLight : AppColors.textDark),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  InkWell(
+                                    onTap: () {
+                                      setState(() {
+                                        _selectedGroupParticipants.removeWhere((item) => item.participantId == gp.participantId);
+                                      });
+                                    },
+                                    child: const Icon(Icons.cancel_rounded, size: 16, color: AppColors.secondary),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+
+                      // 1 Program Name Input for Group Performance
+                      Text(
+                        'Group Program Name (1 Item)',
+                        style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 14, color: isDark ? AppColors.textLight : AppColors.textDark),
+                      ),
+                      const SizedBox(height: 8),
+
+                      Container(
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: isDark ? AppColors.surfaceDark : const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: AppColors.secondary, width: 1.5),
+                        ),
+                        child: TextField(
+                          controller: _groupProgramNameController,
+                          style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: isDark ? AppColors.textLight : AppColors.textDark),
+                          decoration: InputDecoration(
+                            hintText: 'Enter group program name (e.g. DAFFA SONG)...',
+                            hintStyle: GoogleFonts.poppins(fontSize: 12, color: isDark ? AppColors.subtextLight : AppColors.subtextDark),
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                           ),
                         ),
                       ),
-                    ] else ...[
-                      // CASE 3: OTHER (Alumni/Completed)
-                      Padding(
-                        padding: const EdgeInsets.all(20.0),
-                        child: Center(
-                          child: Text(
-                            'Other Program Addition Mode Selected (Alumni / Special).',
-                            style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.accent),
+                      const SizedBox(height: 12),
+
+                      // Preset Suggestions for Group Items
+                      Text(
+                        'Preset Group Items',
+                        style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? AppColors.subtextLight : AppColors.subtextDark),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _presetGroupItems.map((gItem) {
+                          final isSelected = _groupProgramNameController.text.trim().toUpperCase() == gItem;
+                          return InkWell(
+                            onTap: () {
+                              setState(() {
+                                _groupProgramNameController.text = gItem;
+                              });
+                            },
+                            borderRadius: BorderRadius.circular(12),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: isSelected ? AppColors.secondary.withAlpha(30) : (isDark ? AppColors.surfaceDark : const Color(0xFFF1F5F9)),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: isSelected ? AppColors.secondary : Colors.transparent, width: 1.2),
+                              ),
+                              child: Text(
+                                gItem,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 11,
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                  color: isSelected ? AppColors.secondary : (isDark ? AppColors.textLight : AppColors.textDark),
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      // Group Performance Duration Controller
+                      Text(
+                        'Set Group Performance Duration (Minutes)',
+                        style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: isDark ? AppColors.textLight : AppColors.textDark),
+                      ),
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: AppColors.secondary.withAlpha(20),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(Icons.timer_outlined, size: 18, color: AppColors.secondary),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                _groupProgramNameController.text.isEmpty ? 'GROUP PROGRAM' : _groupProgramNameController.text,
+                                style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12, color: isDark ? AppColors.textLight : AppColors.textDark),
+                              ),
+                            ),
+                            Row(
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.remove_circle_outline_rounded, size: 20, color: AppColors.secondary),
+                                  onPressed: () {
+                                    if (_groupDuration > 2) {
+                                      setState(() => _groupDuration--);
+                                    }
+                                  },
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.secondary.withAlpha(25),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    '$_groupDuration mins',
+                                    style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.secondary),
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.add_circle_outline_rounded, size: 20, color: AppColors.secondary),
+                                  onPressed: () {
+                                    setState(() => _groupDuration++);
+                                  },
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    if (widget.programToEdit != null) ...[
+                      const SizedBox(height: 16),
+                      Text(
+                        'Program Status:',
+                        style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: isDark ? AppColors.textLight : AppColors.textDark),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: isDark ? AppColors.cardDark : Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: AppColors.primary.withAlpha(80), width: 1.2),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: _editingStatus,
+                            isExpanded: true,
+                            style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primary),
+                            dropdownColor: isDark ? AppColors.cardDark : Colors.white,
+                            items: const [
+                              DropdownMenuItem(value: 'pending', child: Text('PENDING (Scheduled)')),
+                              DropdownMenuItem(value: 'live', child: Text('LIVE (On Stage)')),
+                              DropdownMenuItem(value: 'completed', child: Text('COMPLETED')),
+                              DropdownMenuItem(value: 'cancelled', child: Text('CANCELLED')),
+                            ],
+                            onChanged: (val) {
+                              if (val != null) {
+                                setState(() {
+                                  _editingStatus = val;
+                                });
+                              }
+                            },
                           ),
                         ),
                       ),
@@ -588,6 +877,92 @@ class _AddProgramSheetState extends State<AddProgramSheet> {
               height: 52,
               child: ElevatedButton.icon(
                 onPressed: () async {
+                  if (_programType == 'group') {
+                    if (_selectedGroupParticipants.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please select at least 2 students for group program'), backgroundColor: AppColors.error),
+                      );
+                      return;
+                    }
+
+                    final pName = _groupProgramNameController.text.trim().toUpperCase();
+                    if (pName.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please enter a group program name'), backgroundColor: AppColors.error),
+                      );
+                      return;
+                    }
+
+                    final combinedNames = _selectedGroupParticipants.map((p) => p.name).join(', ');
+                    final combinedIds = _selectedGroupParticipants.map((p) => p.participantId).join(', ');
+                    final firstP = _selectedGroupParticipants.first;
+
+                    if (widget.programToEdit != null) {
+                      final updatedProg = ProgramModel(
+                        programId: widget.programToEdit!.programId,
+                        participantName: combinedNames,
+                        participantId: combinedIds,
+                        studentClass: firstP.studentClass,
+                        division: firstP.division,
+                        category: firstP.category,
+                        programName: pName,
+                        programType: 'group',
+                        startTime: widget.programToEdit!.startTime,
+                        endTime: widget.programToEdit!.endTime,
+                        duration: '$_groupDuration mins',
+                        status: _editingStatus,
+                        order: widget.programToEdit!.order,
+                        madrasaId: appState.madrasaId,
+                        createdAt: widget.programToEdit!.createdAt,
+                      );
+
+                      await appState.updateProgramInFirestore(updatedProg);
+                      if (!context.mounted) return;
+                      Navigator.of(context).pop();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Group Program ${updatedProg.programId} ($pName) updated successfully!'),
+                          backgroundColor: AppColors.success,
+                        ),
+                      );
+                      return;
+                    }
+
+                    final nowStr = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
+                    final baseOrder = appState.realPrograms.length;
+                    final progId = ProgramModel.generateNextProgramId(baseOrder);
+
+                    final newGroupProgramDoc = ProgramModel(
+                      programId: progId,
+                      participantName: combinedNames,
+                      participantId: combinedIds,
+                      studentClass: firstP.studentClass,
+                      division: firstP.division,
+                      category: firstP.category,
+                      programName: pName,
+                      programType: 'group',
+                      startTime: 'TBD',
+                      endTime: 'TBD',
+                      duration: '$_groupDuration mins',
+                      status: 'pending',
+                      order: baseOrder + 1,
+                      madrasaId: appState.madrasaId,
+                      createdAt: nowStr,
+                    );
+
+                    await appState.addProgramToFirestore(newGroupProgramDoc);
+                    if (!context.mounted) return;
+                    Navigator.of(context).pop();
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Group Program $progId ($pName) with ${_selectedGroupParticipants.length} students added to schedule!'),
+                        backgroundColor: AppColors.success,
+                      ),
+                    );
+                    return;
+                  }
+
                   if (_programType == 'single') {
                     if (_selectedParticipant == null) {
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -618,7 +993,7 @@ class _AddProgramSheetState extends State<AddProgramSheet> {
                         startTime: widget.programToEdit!.startTime,
                         endTime: widget.programToEdit!.endTime,
                         duration: '$durInt mins',
-                        status: widget.programToEdit!.status,
+                        status: _editingStatus,
                         order: widget.programToEdit!.order,
                         madrasaId: appState.madrasaId,
                         createdAt: widget.programToEdit!.createdAt,
@@ -640,7 +1015,6 @@ class _AddProgramSheetState extends State<AddProgramSheet> {
                     final baseOrder = appState.realPrograms.length;
                     final createdIds = <String>[];
 
-                    // Loop over multiple selected program names and save separate Firestore docs!
                     for (int i = 0; i < _selectedProgramNames.length; i++) {
                       final pName = _selectedProgramNames[i];
                       final progId = ProgramModel.generateNextProgramId(baseOrder + i);
@@ -681,11 +1055,13 @@ class _AddProgramSheetState extends State<AddProgramSheet> {
                 },
                 icon: const Icon(Icons.save_rounded, size: 20),
                 label: Text(
-                  'Save ${_selectedProgramNames.length} Program Schedule(s)',
+                  _programType == 'group'
+                      ? 'Save Group Program Schedule'
+                      : 'Save ${_selectedProgramNames.length} Program Schedule(s)',
                   style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 14),
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
+                  backgroundColor: _programType == 'group' ? AppColors.secondary : AppColors.primary,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
@@ -696,6 +1072,5 @@ class _AddProgramSheetState extends State<AddProgramSheet> {
       ),
     );
   }
-
-
 }
+

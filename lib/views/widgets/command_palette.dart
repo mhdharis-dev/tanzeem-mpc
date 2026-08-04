@@ -29,7 +29,7 @@ class _CommandPaletteDialogState extends State<CommandPaletteDialog> {
       {'icon': Icons.people_outline_rounded, 'title': 'View Participants', 'action': () => appState.setTabIndex(4)},
       {'icon': Icons.domain_rounded, 'title': 'Super Admin - Madrasas', 'action': () => appState.setTabIndex(5)},
       {'icon': Icons.bar_chart_rounded, 'title': 'Reports & Analytics', 'action': () => appState.setTabIndex(6)},
-      {'icon': Icons.settings_outlined, 'title': 'System Settings', 'action': () => appState.setTabIndex(7)},
+      {'icon': Icons.person_outline_rounded, 'title': 'Profile / Settings', 'action': () => appState.setTabIndex(7)},
       {
         'icon': isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
         'title': 'Toggle Dark / Light Theme',

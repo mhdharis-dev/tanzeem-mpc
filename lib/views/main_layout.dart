@@ -34,7 +34,6 @@ class MainLayout extends StatelessWidget {
             const DashboardScreen(),
             const SuperAdminScreen(),
             const CoordinatorsScreen(),
-            const MarkCoordinationScreen(),
             const ReportsScreen(),
           ]
         : [

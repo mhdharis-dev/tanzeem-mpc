@@ -38,6 +38,9 @@ class AppState extends ChangeNotifier {
   String _selectedCategoryFilter = 'All';
   String get selectedCategoryFilter => _selectedCategoryFilter;
 
+  String _selectedTypeFilter = 'All';
+  String get selectedTypeFilter => _selectedTypeFilter;
+
   String _selectedStatusFilter = 'All';
   String get selectedStatusFilter => _selectedStatusFilter;
 
@@ -319,6 +322,27 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  Future<bool> uncancelProgramInFirestore(String targetProgramId, String madrasaId) async {
+    try {
+      final mId = madrasaId.isEmpty ? _madrasaId : madrasaId;
+      final targetRef = FirebaseFirestore.instance
+          .collection('madrasa')
+          .doc(mId)
+          .collection('programs')
+          .doc(targetProgramId);
+
+      await targetRef.update({
+        'status': 'pending',
+      });
+
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error uncancelling program: $e');
+      return false;
+    }
+  }
+
   Future<void> recalculateProgramOrdersInFirestore() async {
     try {
       final batch = FirebaseFirestore.instance.batch();
@@ -542,8 +566,22 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setTypeFilter(String val) {
+    _selectedTypeFilter = val;
+    notifyListeners();
+  }
+
   void setStatusFilter(String val) {
     _selectedStatusFilter = val;
+    notifyListeners();
+  }
+
+  void resetAllFilters() {
+    _searchQuery = '';
+    _selectedClassFilter = 'All';
+    _selectedCategoryFilter = 'All';
+    _selectedTypeFilter = 'All';
+    _selectedStatusFilter = 'All';
     notifyListeners();
   }
 
