@@ -1,28 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
-import '../../core/models/mark_model.dart';
+import '../../core/models/present_model.dart';
 import '../../core/models/participant_model.dart';
 import '../../core/providers/app_state.dart';
 import '../../core/theme/app_colors.dart';
 import '../widgets/glass_card.dart';
-import 'add_class_mark_sheet.dart';
+import 'add_class_present_sheet.dart';
 
-class MarkCoordinationScreen extends StatefulWidget {
-  const MarkCoordinationScreen({super.key});
+class ClassAttendanceScreen extends StatefulWidget {
+  const ClassAttendanceScreen({super.key});
 
   @override
-  State<MarkCoordinationScreen> createState() => _MarkCoordinationScreenState();
+  State<ClassAttendanceScreen> createState() => _ClassAttendanceScreenState();
 }
 
-class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
+class _ClassAttendanceScreenState extends State<ClassAttendanceScreen> {
   String _selectedClassFilter = 'All'; // Default set to 'All'
   String _selectedDivFilter = 'All'; // Default set to 'All'
   String _selectedRankFilter = 'All Ranks'; // Rank Scope filter
-  String _selectedGradeFilter = 'All Grades'; // Grade/Performance filter (A+, A, etc.)
-  String _selectedCategoryFilter = 'All Categories'; // Category filter (Junior, Senior, etc.)
-  String _selectedSubjectFilter = 'All Subjects'; // Subject filter
-  String _selectedSubjectMarkRangeFilter = 'All Ranges'; // Subject mark range filter
+  String _selectedStatusFilter = 'All Status'; // Attendance Status filter (90%+, etc.)
+  String _selectedCategoryFilter = 'All Categories'; // Category filter (Junior, etc.)
   final TextEditingController _searchController = TextEditingController();
 
   @override
@@ -31,12 +29,12 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
     super.dispose();
   }
 
-  void _openAddClassMarkSheet({String? initialClass, String? initialDiv}) {
+  void _openAddClassPresentSheet({String? initialClass, String? initialDiv}) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => AddClassMarkSheet(
+      builder: (_) => AddClassPresentSheet(
         initialClass: (initialClass != null && initialClass != 'All') ? initialClass : null,
         initialDiv: (initialDiv != null && initialDiv != 'All') ? initialDiv : null,
       ),
@@ -45,8 +43,8 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
     });
   }
 
-  /// Deletes ONLY the selected student from the mark record in Firestore
-  void _confirmDeleteSingleStudent(BuildContext context, AppState appState, MarkModel record, MarkStudentModel student) {
+  /// Deletes ONLY the selected student from the attendance record in Firestore
+  void _confirmDeleteSingleStudent(BuildContext context, AppState appState, PresentModel record, PresentStudentModel student) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -64,13 +62,13 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
             ),
             const SizedBox(width: 12),
             Text(
-              'Delete Student Mark Record',
+              'Delete Student Attendance',
               style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 16),
             ),
           ],
         ),
         content: Text(
-          'Are you sure you want to remove ${student.name} (${student.participantId}) from the mark roster for ${record.studentClass} (Division ${record.division})?',
+          'Are you sure you want to remove ${student.name} (${student.participantId}) from the attendance roster for ${record.studentClass} (Division ${record.division})?',
           style: GoogleFonts.poppins(fontSize: 13),
         ),
         actions: [
@@ -87,21 +85,22 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
                   .where((s) => s.participantId != student.participantId)
                   .toList();
 
-              MarkModel.calculateTiedRanks(updatedStudents);
+              PresentModel.calculateTiedRanks(updatedStudents);
 
-              final updatedRecord = MarkModel(
+              final updatedRecord = PresentModel(
                 docId: record.docId,
                 studentClass: record.studentClass,
                 division: record.division,
                 totalStudents: updatedStudents.length,
+                maxWorkingDays: record.maxWorkingDays,
                 students: updatedStudents,
               );
 
-              await appState.saveMarkRecordToFirestore(updatedRecord);
+              await appState.savePresentRecordToFirestore(updatedRecord);
 
               messenger.showSnackBar(
                 SnackBar(
-                  content: Text('🗑️ Student ${student.name} removed from mark roster.'),
+                  content: Text('🗑️ Student ${student.name} removed from attendance roster.'),
                   backgroundColor: AppColors.error,
                 ),
               );
@@ -124,10 +123,8 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
       _selectedClassFilter = 'All';
       _selectedDivFilter = 'All';
       _selectedRankFilter = 'All Ranks';
-      _selectedGradeFilter = 'All Grades';
+      _selectedStatusFilter = 'All Status';
       _selectedCategoryFilter = 'All Categories';
-      _selectedSubjectFilter = 'All Subjects';
-      _selectedSubjectMarkRangeFilter = 'All Ranges';
       _searchController.clear();
     });
   }
@@ -137,20 +134,20 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
     final appState = Provider.of<AppState>(context);
     final isDark = appState.isDarkMode;
     final realParticipants = appState.realParticipants;
-    final markRecords = appState.markRecords;
+    final presentRecords = appState.presentRecords;
 
     final searchQuery = _searchController.text.trim().toLowerCase();
 
     // 1. FILTER ONLY MARKED CLASSES & RECORDS (Exclude Unmarked)
-    final List<MarkModel> markedRecords = markRecords.where((r) {
+    final List<PresentModel> markedRecords = presentRecords.where((r) {
       bool matchClass = _selectedClassFilter == 'All' || r.studentClass.toLowerCase() == _selectedClassFilter.toLowerCase();
       bool matchDiv = _selectedDivFilter == 'All' || r.division.toUpperCase() == _selectedDivFilter.toUpperCase();
-      bool hasMarkedStudents = r.students.any((s) => s.totalMarks > 0);
+      bool hasMarkedStudents = r.students.any((s) => s.presentCount > 0);
       return matchClass && matchDiv && hasMarkedStudents;
     }).toList();
 
-    // If Firestore records are empty, construct marked list from realParticipants with totalMarks > 0
-    final List<MarkModel> activeDisplayRecords = [];
+    // If Firestore records are empty, construct marked list from realParticipants with presentCount > 0
+    final List<PresentModel> activeDisplayRecords = [];
 
     if (markedRecords.isNotEmpty) {
       activeDisplayRecords.addAll(markedRecords);
@@ -171,28 +168,22 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
         bool matchDiv = _selectedDivFilter == 'All' || divName.toUpperCase() == _selectedDivFilter.toUpperCase();
 
         if (matchClass && matchDiv) {
-          final List<MarkStudentModel> studentList = pList.map((p) {
-            final thMark = (p.participantId.hashCode % 15) + 35;
-            final fqMark = (p.participantId.hashCode % 12) + 36;
-            return MarkStudentModel(
-              participantId: p.participantId,
-              name: p.name,
-              currentClass: p.studentClass,
-              currentDiv: p.division,
-              subjects: [
-                MarkSubjectModel(subjectName: 'Thareeq', maxMark: 50, studentMark: thMark),
-                MarkSubjectModel(subjectName: 'Fiqh', maxMark: 50, studentMark: fqMark),
-              ],
-            );
-          }).toList();
+          final List<PresentStudentModel> studentList = pList.map((p) => PresentStudentModel(
+            participantId: p.participantId,
+            name: p.name,
+            presentCount: (p.participantId.hashCode % 30) + 165, // Sample marked present count (>0)
+            currentClass: p.studentClass,
+            currentDiv: p.division,
+          )).toList();
 
           if (studentList.isNotEmpty) {
-            MarkModel.calculateTiedRanks(studentList);
-            activeDisplayRecords.add(MarkModel(
+            PresentModel.calculateTiedRanks(studentList);
+            activeDisplayRecords.add(PresentModel(
               docId: '${clsName}_$divName',
               studentClass: clsName,
               division: divName,
               totalStudents: studentList.length,
+              maxWorkingDays: 200,
               students: studentList,
             ));
           }
@@ -200,15 +191,15 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
       });
     }
 
-    // Filter students inside records based on Search, Grade & Category Filters
+    // Filter students inside records based on Search, Status & Category Filters
     int totalMarkedStudentsCount = 0;
     int totalTopPerformersCount = 0;
 
     for (var r in activeDisplayRecords) {
       for (var s in r.students) {
-        if (s.totalMarks > 0) {
+        if (s.presentCount > 0) {
           totalMarkedStudentsCount++;
-          final pct = r.maxTotalMarks > 0 ? (s.totalMarks / r.maxTotalMarks * 100) : 0;
+          final pct = r.maxWorkingDays > 0 ? (s.presentCount / r.maxWorkingDays * 100) : 0;
           if (pct >= 90) totalTopPerformersCount++;
         }
       }
@@ -217,24 +208,9 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
     final hasActiveFilters = _selectedClassFilter != 'All' ||
         _selectedDivFilter != 'All' ||
         _selectedRankFilter != 'All Ranks' ||
-        _selectedGradeFilter != 'All Grades' ||
+        _selectedStatusFilter != 'All Status' ||
         _selectedCategoryFilter != 'All Categories' ||
-        _selectedSubjectFilter != 'All Subjects' ||
-        _selectedSubjectMarkRangeFilter != 'All Ranges' ||
         searchQuery.isNotEmpty;
-
-    // Collect available subjects across active display records
-    final Set<String> availableSubjectsSet = {'All Subjects'};
-    for (var r in activeDisplayRecords) {
-      for (var s in r.students) {
-        for (var sub in s.subjects) {
-          if (sub.subjectName.isNotEmpty) {
-            availableSubjectsSet.add(sub.subjectName);
-          }
-        }
-      }
-    }
-    final List<String> availableSubjectItems = availableSubjectsSet.toList();
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -260,25 +236,25 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
-                              colors: [AppColors.primary, AppColors.secondary],
+                              colors: [AppColors.secondary, AppColors.primary],
                             ),
                             borderRadius: BorderRadius.circular(16),
                             boxShadow: [
                               BoxShadow(
-                                color: AppColors.primary.withAlpha(70),
+                                color: AppColors.secondary.withAlpha(70),
                                 blurRadius: 12,
                                 offset: const Offset(0, 4),
                               ),
                             ],
                           ),
-                          child: const Icon(Icons.grade_rounded, color: Colors.white, size: 28),
+                          child: const Icon(Icons.how_to_reg_rounded, color: Colors.white, size: 28),
                         ),
                         const SizedBox(width: 14),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Mark Coordination',
+                              'Hajar Coordination',
                               style: GoogleFonts.poppins(
                                 fontSize: 24,
                                 fontWeight: FontWeight.bold,
@@ -287,9 +263,9 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
                             ),
                             Text(
                               _selectedClassFilter == 'All'
-                                  ? 'Showing Top 3 Performers for Each Marked Class (Unmarked Excluded)'
-                                  : 'Showing Marked Roster for $_selectedClassFilter (Div $_selectedDivFilter)',
-                              style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary),
+                                  ? 'Showing Top 3 Performers for Each Class'
+                                  : 'Showing  Roster for $_selectedClassFilter (Div $_selectedDivFilter)',
+                              style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.secondary),
                             ),
                           ],
                         ),
@@ -298,13 +274,13 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
                   ],
                 ),
 
-                // Top Action Button: + Add Class Mark
+                // Top Action Button: + Add Class Present
                 ElevatedButton.icon(
-                  onPressed: () => _openAddClassMarkSheet(),
-                  icon: const Icon(Icons.post_add_rounded, size: 18),
-                  label: Text('+ Add Class Mark', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13)),
+                  onPressed: () => _openAddClassPresentSheet(),
+                  icon: const Icon(Icons.person_add_rounded, size: 18),
+                  label: Text('+ Add Class Present', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13)),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
+                    backgroundColor: AppColors.secondary,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -328,9 +304,9 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   children: [
-                    _buildSummaryCard(context, 'Marked Classes', '${activeDisplayRecords.length} Classes', 'Active Roster Docs', Icons.school_rounded, AppColors.primary),
-                    _buildSummaryCard(context, 'Marked Competitors', '$totalMarkedStudentsCount Students', 'Excludes Unmarked', Icons.groups_rounded, AppColors.secondary),
-                    _buildSummaryCard(context, 'Top Performers (A+)', '$totalTopPerformersCount Students', 'Score 90%+', Icons.workspace_premium_rounded, AppColors.success),
+                    _buildSummaryCard(context, 'Marked Classes', '${activeDisplayRecords.length} Classes', 'Active Roster Docs', Icons.school_rounded, AppColors.secondary),
+                    _buildSummaryCard(context, 'Marked Competitors', '$totalMarkedStudentsCount Students', 'Excludes Unmarked', Icons.groups_rounded, AppColors.primary),
+                    _buildSummaryCard(context, 'Top Performers (90%+)', '$totalTopPerformersCount Students', 'Excellent Attendance', Icons.workspace_premium_rounded, AppColors.success),
                     _buildSummaryCard(context, 'Active Display Mode', _selectedClassFilter == 'All' ? 'Top 3 Per Class' : 'Full Class Roster', 'Auto Leaderboard', Icons.leaderboard_rounded, AppColors.warning),
                   ],
                 );
@@ -339,7 +315,7 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
 
             const SizedBox(height: 20),
 
-            // Filter Dashboard with Extra Related Filters (Class, Div, Rank, Grade, Category, Subject, Mark Range, Search)
+            // Filter Dashboard with Extra Related Filters (Class, Div, Rank, Status, Category, Search)
             GlassCard(
               borderRadius: 20,
               padding: const EdgeInsets.all(18),
@@ -426,23 +402,23 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
                         isDark: isDark,
                       ),
 
-                      // 3. Grade / Performance Filter Dropdown
+                      // 3. Attendance Status Filter Dropdown (90%+, etc.)
                       _buildFilterDropdown(
                         context,
-                        label: 'Grade Scope',
-                        value: _selectedGradeFilter,
-                        items: ['All Grades', 'A+ (90%+)', 'A (80%-89%)', 'B+ (70%-79%)', 'B (60%-69%)', 'C (<60%)'],
-                        onChanged: (val) => setState(() => _selectedGradeFilter = val!),
+                        label: 'Attendance Status',
+                        value: _selectedStatusFilter,
+                        items: ['All Status', 'Excellent (90%+)', 'Good (75%-89%)', 'Average (50%-74%)', 'Low (<50%)'],
+                        onChanged: (val) => setState(() => _selectedStatusFilter = val!),
                         icon: Icons.fact_check_rounded,
                         isDark: isDark,
                       ),
 
-                      // 4. Category Filter Dropdown
+                      // 4. Category Filter Dropdown (Junior, Senior, etc.)
                       _buildFilterDropdown(
                         context,
                         label: 'Category Filter',
                         value: _selectedCategoryFilter,
-                        items: ['All Categories', 'Sub-Junior', 'Junior', 'Senior', 'Super Senior'],
+                        items: ['All Categories', 'Sub-Junior' , 'Junior', 'Senior', 'Super Senior'],
                         onChanged: (val) => setState(() => _selectedCategoryFilter = val!),
                         icon: Icons.workspace_premium_rounded,
                         isDark: isDark,
@@ -467,28 +443,6 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
                         icon: Icons.emoji_events_rounded,
                         isDark: isDark,
                       ),
-
-                      // 6. Combined Subject Filter Dropdown
-                      _buildFilterDropdown(
-                        context,
-                        label: 'Subject',
-                        value: availableSubjectItems.contains(_selectedSubjectFilter) ? _selectedSubjectFilter : 'All Subjects',
-                        items: availableSubjectItems,
-                        onChanged: (val) => setState(() => _selectedSubjectFilter = val!),
-                        icon: Icons.menu_book_rounded,
-                        isDark: isDark,
-                      ),
-
-                      // 7. Combined Subject Mark Range Filter Dropdown
-                      _buildFilterDropdown(
-                        context,
-                        label: 'Mark Range',
-                        value: _selectedSubjectMarkRangeFilter,
-                        items: ['All Ranges', '40-50 Marks (High)', '30-39 Marks (Mid)', '<30 Marks (Low)', '90-100% Score', '75-89% Score', '<75% Score'],
-                        onChanged: (val) => setState(() => _selectedSubjectMarkRangeFilter = val!),
-                        icon: Icons.score_rounded,
-                        isDark: isDark,
-                      ),
                     ],
                   ),
                 ],
@@ -497,7 +451,7 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
 
             const SizedBox(height: 20),
 
-            // Read-Only Mark Leaderboard Cards
+            // Read-Only Attendance Leaderboard Cards
             if (activeDisplayRecords.isEmpty)
               GlassCard(
                 padding: const EdgeInsets.all(48.0),
@@ -508,12 +462,12 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
                       const Icon(Icons.person_off_rounded, size: 48, color: AppColors.subtextDark),
                       const SizedBox(height: 12),
                       Text(
-                        'No Marked Performance Records Found',
+                        'No Marked Attendance Records Found',
                         style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? AppColors.textLight : AppColors.textDark),
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'Unmarked classes and students are hidden. Tap "+ Add Class Mark" to record performance marks.',
+                        'Unmarked classes and students are hidden. Tap "+ Add Class Present" to record attendance.',
                         style: GoogleFonts.poppins(fontSize: 12, color: isDark ? AppColors.subtextLight : AppColors.subtextDark),
                       ),
                     ],
@@ -521,7 +475,7 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
                 ),
               )
             else if (_selectedRankFilter.startsWith('Madrasa Topper')) ...[
-              // MADRASA TOPPERS OVERALL MARKS LEADERBOARD (Top 1 to N Across All Classes)
+              // MADRASA TOPPERS OVERALL LEADERBOARD (Top 1 to N Across All Classes)
               Builder(
                 builder: (context) {
                   int maxRankLimit = 10;
@@ -541,19 +495,18 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
                   final List<Map<String, dynamic>> overallList = [];
                   for (var r in activeDisplayRecords) {
                     for (var s in r.students) {
-                      if (s.totalMarks > 0) {
+                      if (s.presentCount > 0) {
                         bool matchSearch = searchQuery.isEmpty ||
                             s.name.toLowerCase().contains(searchQuery) ||
                             s.participantId.toLowerCase().contains(searchQuery) ||
                             s.currentClass.toLowerCase().contains(searchQuery);
 
-                        bool matchGrade = true;
-                        final pct = r.maxTotalMarks > 0 ? (s.totalMarks / r.maxTotalMarks * 100) : 0;
-                        if (_selectedGradeFilter == 'A+ (90%+)') matchGrade = pct >= 90;
-                        if (_selectedGradeFilter == 'A (80%-89%)') matchGrade = pct >= 80 && pct < 90;
-                        if (_selectedGradeFilter == 'B+ (70%-79%)') matchGrade = pct >= 70 && pct < 80;
-                        if (_selectedGradeFilter == 'B (60%-69%)') matchGrade = pct >= 60 && pct < 70;
-                        if (_selectedGradeFilter == 'C (<60%)') matchGrade = pct < 60;
+                        bool matchStatus = true;
+                        final pct = r.maxWorkingDays > 0 ? (s.presentCount / r.maxWorkingDays * 100) : 0;
+                        if (_selectedStatusFilter == 'Excellent (90%+)') matchStatus = pct >= 90;
+                        if (_selectedStatusFilter == 'Good (75%-89%)') matchStatus = pct >= 75 && pct < 90;
+                        if (_selectedStatusFilter == 'Average (50%-74%)') matchStatus = pct >= 50 && pct < 75;
+                        if (_selectedStatusFilter == 'Low (<50%)') matchStatus = pct < 50;
 
                         bool matchCategory = true;
                         if (_selectedCategoryFilter != 'All Categories') {
@@ -563,47 +516,10 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
                           } catch (_) {}
                         }
 
-                        bool matchSubjectAndRange = true;
-                        if (_selectedSubjectFilter != 'All Subjects' || _selectedSubjectMarkRangeFilter != 'All Ranges') {
-                          if (s.subjects.isEmpty) {
-                            matchSubjectAndRange = true;
-                          } else {
-                            List<MarkSubjectModel> matchingSubjects = s.subjects;
-                            if (_selectedSubjectFilter != 'All Subjects') {
-                              matchingSubjects = s.subjects.where((sub) => sub.subjectName.toLowerCase() == _selectedSubjectFilter.toLowerCase()).toList();
-                              if (matchingSubjects.isEmpty) matchSubjectAndRange = false;
-                            }
-
-                            if (matchSubjectAndRange && _selectedSubjectMarkRangeFilter != 'All Ranges') {
-                              bool passRange = false;
-                              for (var sub in matchingSubjects) {
-                                final maxM = sub.maxMark > 0 ? sub.maxMark : 50;
-                                final markVal = sub.studentMark;
-                                final subPct = (markVal / maxM * 100);
-
-                                if (_selectedSubjectMarkRangeFilter == '40-50 Marks (High)') {
-                                  if (markVal >= 40 && markVal <= 50) passRange = true;
-                                } else if (_selectedSubjectMarkRangeFilter == '30-39 Marks (Mid)') {
-                                  if (markVal >= 30 && markVal < 40) passRange = true;
-                                } else if (_selectedSubjectMarkRangeFilter == '<30 Marks (Low)') {
-                                  if (markVal < 30) passRange = true;
-                                } else if (_selectedSubjectMarkRangeFilter == '90-100% Score') {
-                                  if (subPct >= 90) passRange = true;
-                                } else if (_selectedSubjectMarkRangeFilter == '75-89% Score') {
-                                  if (subPct >= 75 && subPct < 90) passRange = true;
-                                } else if (_selectedSubjectMarkRangeFilter == '<75% Score') {
-                                  if (subPct < 75) passRange = true;
-                                }
-                              }
-                              if (!passRange) matchSubjectAndRange = false;
-                            }
-                          }
-                        }
-
-                        if (matchSearch && matchGrade && matchCategory && matchSubjectAndRange) {
+                        if (matchSearch && matchStatus && matchCategory) {
                           overallList.add({
                             'student': s,
-                            'maxTotalMarks': r.maxTotalMarks,
+                            'maxWorkingDays': r.maxWorkingDays,
                             'class': r.studentClass,
                             'division': r.division,
                           });
@@ -612,17 +528,17 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
                     }
                   }
 
-                  // Sort overall candidates descending by totalMarks
-                  overallList.sort((a, b) => (b['student'] as MarkStudentModel).totalMarks.compareTo((a['student'] as MarkStudentModel).totalMarks));
+                  // Sort overall candidates descending by presentCount
+                  overallList.sort((a, b) => (b['student'] as PresentStudentModel).presentCount.compareTo((a['student'] as PresentStudentModel).presentCount));
 
                   // Calculate tied overall ranks
                   if (overallList.isNotEmpty) {
                     int currRank = 1;
-                    (overallList[0]['student'] as MarkStudentModel).rank = 1;
+                    (overallList[0]['student'] as PresentStudentModel).rank = 1;
                     for (int i = 1; i < overallList.length; i++) {
-                      final sCurr = overallList[i]['student'] as MarkStudentModel;
-                      final sPrev = overallList[i - 1]['student'] as MarkStudentModel;
-                      if (sCurr.totalMarks == sPrev.totalMarks) {
+                      final sCurr = overallList[i]['student'] as PresentStudentModel;
+                      final sPrev = overallList[i - 1]['student'] as PresentStudentModel;
+                      if (sCurr.presentCount == sPrev.presentCount) {
                         sCurr.rank = sPrev.rank;
                       } else {
                         currRank = i + 1;
@@ -632,7 +548,7 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
                   }
 
                   // Take Top N Ranks only
-                  final toppersList = overallList.where((item) => (item['student'] as MarkStudentModel).rank <= maxRankLimit).toList();
+                  final toppersList = overallList.where((item) => (item['student'] as PresentStudentModel).rank <= maxRankLimit).toList();
 
                   if (toppersList.isEmpty) {
                     return GlassCard(
@@ -640,7 +556,7 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
                       borderRadius: 20,
                       child: Center(
                         child: Text(
-                          'No Madrasa Mark Toppers found for the selected filter criteria.',
+                          'No Madrasa Toppers found for the selected filter criteria.',
                           style: GoogleFonts.poppins(fontSize: 13, color: isDark ? AppColors.textLight : AppColors.textDark),
                         ),
                       ),
@@ -670,8 +586,8 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
                               ),
                               const SizedBox(width: 10),
                               Text(
-                                'Top ${maxRankLimit == 1 ? "1" : "1 to $maxRankLimit"} Overall Performance Ranks Across Madrasa',
-                                style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.primary),
+                                'Top ${maxRankLimit == 1 ? "1" : "1 to $maxRankLimit"} Overall Attendance Ranks Across Madrasa',
+                                style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.secondary),
                               ),
                             ],
                           ),
@@ -704,11 +620,11 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
                                             const SizedBox(width: 12),
                                             Expanded(flex: 2, child: Text('CLASS & DIV', style: _headerStyle(isDark))),
                                             const SizedBox(width: 12),
-                                            SizedBox(width: 120, child: Text('TOTAL MARKS', style: _headerStyle(isDark, color: AppColors.primary))),
+                                            SizedBox(width: 120, child: Text('PRESENT DAYS', style: _headerStyle(isDark, color: AppColors.secondary))),
                                             const SizedBox(width: 12),
-                                            Expanded(flex: 3, child: Text('PERFORMANCE RATE', style: _headerStyle(isDark, color: AppColors.secondary))),
+                                            Expanded(flex: 3, child: Text('ATTENDANCE RATE', style: _headerStyle(isDark, color: AppColors.primary))),
                                             const SizedBox(width: 12),
-                                            SizedBox(width: 110, child: Text('GRADE BADGE', style: _headerStyle(isDark))),
+                                            SizedBox(width: 110, child: Text('STATUS BADGE', style: _headerStyle(isDark))),
                                             const SizedBox(width: 12),
                                             SizedBox(width: 90, child: Text('ACTIONS', style: _headerStyle(isDark))),
                                           ],
@@ -717,14 +633,14 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
                                       const SizedBox(height: 6),
 
                                       ...toppersList.map((item) {
-                                        final s = item['student'] as MarkStudentModel;
-                                        final maxMarks = item['maxTotalMarks'] as int;
+                                        final s = item['student'] as PresentStudentModel;
+                                        final maxDays = item['maxWorkingDays'] as int;
                                         final clsName = item['class'] as String;
                                         final divName = item['division'] as String;
-                                        final pct = maxMarks > 0 ? (s.totalMarks / maxMarks * 100).clamp(0, 100) : 0.0;
+                                        final pct = maxDays > 0 ? (s.presentCount / maxDays * 100).clamp(0, 100) : 0.0;
 
                                         String rankLabel = 'Rank ${s.rank}';
-                                        Color rankColor = AppColors.primary;
+                                        Color rankColor = AppColors.secondary;
                                         if (s.rank == 1) {
                                           rankLabel = '🥇 Rank 1';
                                           rankColor = const Color(0xFFEAB308);
@@ -736,23 +652,20 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
                                           rankColor = const Color(0xFFD97706);
                                         }
 
-                                        String gradeLabel = 'Grade ${s.grade}';
-                                        Color gradeColor = AppColors.success;
+                                        String statusLabel = 'Average';
+                                        Color statusColor = AppColors.primary;
                                         if (pct >= 90) {
-                                          gradeLabel = 'Grade A+ 🌟';
-                                          gradeColor = AppColors.success;
-                                        } else if (pct >= 80) {
-                                          gradeLabel = 'Grade A 👍';
-                                          gradeColor = AppColors.primary;
-                                        } else if (pct >= 70) {
-                                          gradeLabel = 'Grade B+ 📈';
-                                          gradeColor = AppColors.secondary;
-                                        } else if (pct >= 60) {
-                                          gradeLabel = 'Grade B ⚡';
-                                          gradeColor = AppColors.warning;
+                                          statusLabel = 'Excellent 🌟';
+                                          statusColor = AppColors.success;
+                                        } else if (pct >= 75) {
+                                          statusLabel = 'Good 👍';
+                                          statusColor = AppColors.secondary;
+                                        } else if (pct >= 50) {
+                                          statusLabel = 'Average 📈';
+                                          statusColor = AppColors.warning;
                                         } else {
-                                          gradeLabel = 'Grade C ⚠️';
-                                          gradeColor = AppColors.error;
+                                          statusLabel = 'Low ⚠️';
+                                          statusColor = AppColors.error;
                                         }
 
                                         return Container(
@@ -790,10 +703,10 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
                                                     Container(
                                                       padding: const EdgeInsets.all(6),
                                                       decoration: BoxDecoration(
-                                                        color: AppColors.primary.withAlpha(25),
+                                                        color: AppColors.secondary.withAlpha(25),
                                                         shape: BoxShape.circle,
                                                       ),
-                                                      child: const Icon(Icons.person_rounded, size: 14, color: AppColors.primary),
+                                                      child: const Icon(Icons.person_rounded, size: 14, color: AppColors.secondary),
                                                     ),
                                                     const SizedBox(width: 10),
                                                     Expanded(
@@ -834,7 +747,7 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
                                                     ),
                                                     Text(
                                                       'Division $divName',
-                                                      style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.secondary),
+                                                      style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.primary),
                                                       maxLines: 1,
                                                       overflow: TextOverflow.ellipsis,
                                                     ),
@@ -847,13 +760,13 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
                                                 child: Container(
                                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                                   decoration: BoxDecoration(
-                                                    color: AppColors.primary.withAlpha(20),
+                                                    color: AppColors.secondary.withAlpha(20),
                                                     borderRadius: BorderRadius.circular(8),
-                                                    border: Border.all(color: AppColors.primary.withAlpha(70), width: 1.0),
+                                                    border: Border.all(color: AppColors.secondary.withAlpha(70), width: 1.0),
                                                   ),
                                                   child: Text(
-                                                    '${s.totalMarks} / $maxMarks Marks',
-                                                    style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 11, color: AppColors.primary),
+                                                    '${s.presentCount} / $maxDays Days',
+                                                    style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 11, color: AppColors.secondary),
                                                     textAlign: TextAlign.center,
                                                   ),
                                                 ),
@@ -868,10 +781,10 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
                                                     Row(
                                                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                                       children: [
-                                                        Text('Score Rate', style: GoogleFonts.poppins(fontSize: 10, color: isDark ? AppColors.subtextLight : AppColors.subtextDark)),
+                                                        Text('Attendance Rate', style: GoogleFonts.poppins(fontSize: 10, color: isDark ? AppColors.subtextLight : AppColors.subtextDark)),
                                                         Text(
                                                           '${pct.toStringAsFixed(1)}%',
-                                                          style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: gradeColor),
+                                                          style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: statusColor),
                                                         ),
                                                       ],
                                                     ),
@@ -882,7 +795,7 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
                                                         value: pct / 100,
                                                         minHeight: 6,
                                                         backgroundColor: isDark ? Colors.white10 : const Color(0xFFE2E8F0),
-                                                        valueColor: AlwaysStoppedAnimation<Color>(gradeColor),
+                                                        valueColor: AlwaysStoppedAnimation<Color>(statusColor),
                                                       ),
                                                     ),
                                                   ],
@@ -894,13 +807,13 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
                                                 child: Container(
                                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                                   decoration: BoxDecoration(
-                                                    color: gradeColor.withAlpha(25),
+                                                    color: statusColor.withAlpha(25),
                                                     borderRadius: BorderRadius.circular(8),
-                                                    border: Border.all(color: gradeColor.withAlpha(80), width: 1.0),
+                                                    border: Border.all(color: statusColor.withAlpha(80), width: 1.0),
                                                   ),
                                                   child: Text(
-                                                    gradeLabel,
-                                                    style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 10, color: gradeColor),
+                                                    statusLabel,
+                                                    style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 10, color: statusColor),
                                                     textAlign: TextAlign.center,
                                                   ),
                                                 ),
@@ -948,9 +861,9 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
               ),
             ] else
               ...activeDisplayRecords.map((record) {
-                // Get students with totalMarks > 0 (Exclude unmarked students!)
-                List<MarkStudentModel> students = record.students
-                    .where((s) => s.totalMarks > 0)
+                // Get students with presentCount > 0 (Exclude unmarked students!)
+                List<PresentStudentModel> students = record.students
+                    .where((s) => s.presentCount > 0)
                     .toList();
 
                 // Apply Search filter
@@ -962,15 +875,14 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
                   ).toList();
                 }
 
-                // Apply Grade Filter (A+, A, etc.)
-                if (_selectedGradeFilter != 'All Grades') {
+                // Apply Attendance Status Filter (90%+, Good, etc.)
+                if (_selectedStatusFilter != 'All Status') {
                   students = students.where((s) {
-                    final pct = record.maxTotalMarks > 0 ? (s.totalMarks / record.maxTotalMarks * 100) : 0;
-                    if (_selectedGradeFilter == 'A+ (90%+)') return pct >= 90;
-                    if (_selectedGradeFilter == 'A (80%-89%)') return pct >= 80 && pct < 90;
-                    if (_selectedGradeFilter == 'B+ (70%-79%)') return pct >= 70 && pct < 80;
-                    if (_selectedGradeFilter == 'B (60%-69%)') return pct >= 60 && pct < 70;
-                    if (_selectedGradeFilter == 'C (<60%)') return pct < 60;
+                    final pct = record.maxWorkingDays > 0 ? (s.presentCount / record.maxWorkingDays * 100) : 0;
+                    if (_selectedStatusFilter == 'Excellent (90%+)') return pct >= 90;
+                    if (_selectedStatusFilter == 'Good (75%-89%)') return pct >= 75 && pct < 90;
+                    if (_selectedStatusFilter == 'Average (50%-74%)') return pct >= 50 && pct < 75;
+                    if (_selectedStatusFilter == 'Low (<50%)') return pct < 50;
                     return true;
                   }).toList();
                 }
@@ -994,47 +906,8 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
                   students = students.where((s) => s.rank == 1).toList();
                 }
 
-                // Apply Combined Subject & Subject Mark Range Filter
-                if (_selectedSubjectFilter != 'All Subjects' || _selectedSubjectMarkRangeFilter != 'All Ranges') {
-                  students = students.where((s) {
-                    if (s.subjects.isEmpty) return true;
-
-                    List<MarkSubjectModel> matchingSubjects = s.subjects;
-                    if (_selectedSubjectFilter != 'All Subjects') {
-                      matchingSubjects = s.subjects.where((sub) => sub.subjectName.toLowerCase() == _selectedSubjectFilter.toLowerCase()).toList();
-                      if (matchingSubjects.isEmpty) return false;
-                    }
-
-                    if (_selectedSubjectMarkRangeFilter != 'All Ranges') {
-                      bool passRange = false;
-                      for (var sub in matchingSubjects) {
-                        final maxM = sub.maxMark > 0 ? sub.maxMark : 50;
-                        final markVal = sub.studentMark;
-                        final pct = (markVal / maxM * 100);
-
-                        if (_selectedSubjectMarkRangeFilter == '40-50 Marks (High)') {
-                          if (markVal >= 40 && markVal <= 50) passRange = true;
-                        } else if (_selectedSubjectMarkRangeFilter == '30-39 Marks (Mid)') {
-                          if (markVal >= 30 && markVal < 40) passRange = true;
-                        } else if (_selectedSubjectMarkRangeFilter == '<30 Marks (Low)') {
-                          if (markVal < 30) passRange = true;
-                        } else if (_selectedSubjectMarkRangeFilter == '90-100% Score') {
-                          if (pct >= 90) passRange = true;
-                        } else if (_selectedSubjectMarkRangeFilter == '75-89% Score') {
-                          if (pct >= 75 && pct < 90) passRange = true;
-                        } else if (_selectedSubjectMarkRangeFilter == '<75% Score') {
-                          if (pct < 75) passRange = true;
-                        }
-                      }
-                      if (!passRange) return false;
-                    }
-
-                    return true;
-                  }).toList();
-                }
-
                 // DEFAULT 'ALL' CLASS FILTER: Show Top 3 Students for each marked class!
-                if (_selectedClassFilter == 'All' && _selectedRankFilter == 'All Ranks' && _selectedGradeFilter == 'All Grades' && _selectedCategoryFilter == 'All Categories' && _selectedSubjectFilter == 'All Subjects' && _selectedSubjectMarkRangeFilter == 'All Ranges' && searchQuery.isEmpty) {
+                if (_selectedClassFilter == 'All' && _selectedRankFilter == 'All Ranks' && _selectedStatusFilter == 'All Status' && _selectedCategoryFilter == 'All Categories' && searchQuery.isEmpty) {
                   students = students.take(3).toList();
                 }
 
@@ -1057,7 +930,7 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                   decoration: BoxDecoration(
-                                    gradient: const LinearGradient(colors: [AppColors.primary, AppColors.secondary]),
+                                    gradient: const LinearGradient(colors: [AppColors.secondary, AppColors.primary]),
                                     borderRadius: BorderRadius.circular(10),
                                   ),
                                   child: Text(
@@ -1069,17 +942,17 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
                                 Text(
                                   _selectedClassFilter == 'All'
                                       ? '🏆 Top ${students.length} Performers Leaderboard'
-                                      : '📋 Marked Roster (${students.length} Students)',
+                                      : '📋 Marked Attendance Roster (${students.length} Students)',
                                   style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: isDark ? AppColors.textLight : AppColors.textDark),
                                 ),
                               ],
                             ),
 
-                            // Edit Class Mark Button
+                            // Edit Class Attendance Button
                             IconButton(
-                              icon: const Icon(Icons.edit_note_rounded, color: AppColors.primary, size: 22),
-                              tooltip: 'Edit Class Mark',
-                              onPressed: () => _openAddClassMarkSheet(
+                              icon: const Icon(Icons.edit_note_rounded, color: AppColors.secondary, size: 22),
+                              tooltip: 'Edit Class Present',
+                              onPressed: () => _openAddClassPresentSheet(
                                 initialClass: record.studentClass,
                                 initialDiv: record.division,
                               ),
@@ -1118,11 +991,11 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
                                           const SizedBox(width: 12),
                                           Expanded(flex: 2, child: Text('CLASS & DIV', style: _headerStyle(isDark))),
                                           const SizedBox(width: 12),
-                                          SizedBox(width: 120, child: Text('TOTAL MARKS', style: _headerStyle(isDark, color: AppColors.primary))),
+                                          SizedBox(width: 120, child: Text('DAYS PRESENT', style: _headerStyle(isDark, color: AppColors.secondary))),
                                           const SizedBox(width: 12),
-                                          Expanded(flex: 3, child: Text('PERFORMANCE ANALYTICS', style: _headerStyle(isDark, color: AppColors.secondary))),
+                                          Expanded(flex: 3, child: Text('ATTENDANCE ANALYTICS', style: _headerStyle(isDark, color: AppColors.primary))),
                                           const SizedBox(width: 12),
-                                          SizedBox(width: 110, child: Text('GRADE BADGE', style: _headerStyle(isDark))),
+                                          SizedBox(width: 110, child: Text('STATUS BADGE', style: _headerStyle(isDark))),
                                           const SizedBox(width: 12),
                                           SizedBox(width: 90, child: Text('ACTIONS', style: _headerStyle(isDark))),
                                         ],
@@ -1132,10 +1005,10 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
 
                                     // Data Rows List
                                     ...students.map((s) {
-                                      final pct = record.maxTotalMarks > 0 ? (s.totalMarks / record.maxTotalMarks * 100).clamp(0, 100) : 0.0;
+                                      final pct = record.maxWorkingDays > 0 ? (s.presentCount / record.maxWorkingDays * 100).clamp(0, 100) : 0.0;
 
                                       String rankLabel = 'Rank ${s.rank}';
-                                      Color rankColor = AppColors.primary;
+                                      Color rankColor = AppColors.secondary;
                                       if (s.rank == 1) {
                                         rankLabel = '🥇 Rank 1';
                                         rankColor = const Color(0xFFEAB308); // Gold
@@ -1147,23 +1020,20 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
                                         rankColor = const Color(0xFFD97706); // Bronze
                                       }
 
-                                      String gradeLabel = 'Grade ${s.grade}';
-                                      Color gradeColor = AppColors.success;
+                                      String statusLabel = 'EXCELLENT 🌟';
+                                      Color statusColor = AppColors.success;
                                       if (pct >= 90) {
-                                        gradeLabel = 'Grade A+ 🌟';
-                                        gradeColor = AppColors.success;
-                                      } else if (pct >= 80) {
-                                        gradeLabel = 'Grade A 👍';
-                                        gradeColor = AppColors.primary;
-                                      } else if (pct >= 70) {
-                                        gradeLabel = 'Grade B+ 📈';
-                                        gradeColor = AppColors.secondary;
-                                      } else if (pct >= 60) {
-                                        gradeLabel = 'Grade B ⚡';
-                                        gradeColor = AppColors.warning;
+                                        statusLabel = 'EXCELLENT 🌟';
+                                        statusColor = AppColors.success;
+                                      } else if (pct >= 75) {
+                                        statusLabel = 'GOOD 👍';
+                                        statusColor = AppColors.primary;
+                                      } else if (pct >= 50) {
+                                        statusLabel = 'AVERAGE ⚠️';
+                                        statusColor = AppColors.warning;
                                       } else {
-                                        gradeLabel = 'Grade C ⚠️';
-                                        gradeColor = AppColors.error;
+                                        statusLabel = 'LOW ❌';
+                                        statusColor = AppColors.error;
                                       }
 
                                       return Container(
@@ -1204,10 +1074,10 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
                                                   Container(
                                                     padding: const EdgeInsets.all(6),
                                                     decoration: BoxDecoration(
-                                                      color: AppColors.primary.withAlpha(25),
+                                                      color: AppColors.secondary.withAlpha(25),
                                                       shape: BoxShape.circle,
                                                     ),
-                                                    child: const Icon(Icons.person_rounded, size: 14, color: AppColors.primary),
+                                                    child: const Icon(Icons.person_rounded, size: 14, color: AppColors.secondary),
                                                   ),
                                                   const SizedBox(width: 10),
                                                   Expanded(
@@ -1250,7 +1120,7 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
                                                   ),
                                                   Text(
                                                     'Division ${record.division}',
-                                                    style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.secondary),
+                                                    style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.primary),
                                                     maxLines: 1,
                                                     overflow: TextOverflow.ellipsis,
                                                   ),
@@ -1259,26 +1129,26 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
                                             ),
                                             const SizedBox(width: 12),
 
-                                            // 4. TOTAL MARKS (120)
+                                            // 4. DAYS PRESENT (120)
                                             SizedBox(
                                               width: 120,
                                               child: Container(
                                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                                 decoration: BoxDecoration(
-                                                  color: AppColors.primary.withAlpha(20),
+                                                  color: AppColors.secondary.withAlpha(20),
                                                   borderRadius: BorderRadius.circular(8),
-                                                  border: Border.all(color: AppColors.primary.withAlpha(70), width: 1.0),
+                                                  border: Border.all(color: AppColors.secondary.withAlpha(70), width: 1.0),
                                                 ),
                                                 child: Text(
-                                                  '${s.totalMarks} / ${record.maxTotalMarks} Marks',
-                                                  style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 11, color: AppColors.primary),
+                                                  '${s.presentCount} / ${record.maxWorkingDays} Days',
+                                                  style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 11, color: AppColors.secondary),
                                                   textAlign: TextAlign.center,
                                                 ),
                                               ),
                                             ),
                                             const SizedBox(width: 12),
 
-                                            // 5. PERFORMANCE ANALYTICS (Expanded flex 3)
+                                            // 5. ATTENDANCE ANALYTICS (Expanded flex 3)
                                             Expanded(
                                               flex: 3,
                                               child: Column(
@@ -1288,10 +1158,10 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
                                                   Row(
                                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                                     children: [
-                                                      Text('Score Rate', style: GoogleFonts.poppins(fontSize: 10, color: isDark ? AppColors.subtextLight : AppColors.subtextDark)),
+                                                      Text('Attendance Rate', style: GoogleFonts.poppins(fontSize: 10, color: isDark ? AppColors.subtextLight : AppColors.subtextDark)),
                                                       Text(
                                                         '${pct.toStringAsFixed(1)}%',
-                                                        style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: gradeColor),
+                                                        style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: statusColor),
                                                       ),
                                                     ],
                                                   ),
@@ -1302,7 +1172,7 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
                                                       value: pct / 100,
                                                       minHeight: 6,
                                                       backgroundColor: isDark ? Colors.white10 : const Color(0xFFE2E8F0),
-                                                      valueColor: AlwaysStoppedAnimation<Color>(gradeColor),
+                                                      valueColor: AlwaysStoppedAnimation<Color>(statusColor),
                                                     ),
                                                   ),
                                                 ],
@@ -1310,19 +1180,19 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
                                             ),
                                             const SizedBox(width: 12),
 
-                                            // 6. GRADE BADGE (110)
+                                            // 6. STATUS BADGE (110)
                                             SizedBox(
                                               width: 110,
                                               child: Container(
                                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                                 decoration: BoxDecoration(
-                                                  color: gradeColor.withAlpha(25),
+                                                  color: statusColor.withAlpha(25),
                                                   borderRadius: BorderRadius.circular(8),
-                                                  border: Border.all(color: gradeColor.withAlpha(80), width: 1.0),
+                                                  border: Border.all(color: statusColor.withAlpha(80), width: 1.0),
                                                 ),
                                                 child: Text(
-                                                  gradeLabel,
-                                                  style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 10, color: gradeColor),
+                                                  statusLabel,
+                                                  style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 10, color: statusColor),
                                                   textAlign: TextAlign.center,
                                                 ),
                                               ),
@@ -1390,7 +1260,7 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
     required IconData icon,
     required bool isDark,
   }) {
-    final isSelected = value != 'All' && value != 'All Ranks' && value != 'All Grades' && value != 'All Categories';
+    final isSelected = value != 'All' && value != 'All Ranks' && value != 'All Status' && value != 'All Categories';
 
     return Container(
       height: 42,

@@ -2,6 +2,8 @@ export 'madrasa_model.dart';
 import 'madrasa_model.dart';
 export 'participant_model.dart';
 export 'program_model.dart';
+export 'present_model.dart';
+export 'mark_model.dart';
 
 enum ProgramStatus { pending, live, completed, cancelled }
 

@@ -13,9 +13,13 @@ import 'programs/add_program_dialog.dart';
 import 'schedule/schedule_screen.dart';
 import 'live_stage/live_stage_screen.dart';
 import 'participants/participants_screen.dart';
+import 'teams/teams_screen.dart';
+import 'side_events/side_events_screen.dart';
+import 'scoreboard/scoreboard_screen.dart';
 import 'super_admin/super_admin_screen.dart';
 import 'super_admin/coordinators_screen.dart';
 import 'coordination/mark_coordination_screen.dart';
+import 'coordination/class_attendance_screen.dart';
 import 'reports/reports_screen.dart';
 import 'settings/settings_screen.dart';
 
@@ -38,11 +42,15 @@ class MainLayout extends StatelessWidget {
           ]
         : [
             const DashboardScreen(),
-            const ProgramsListScreen(),
-            const ScheduleScreen(),
-            const LiveStageScreen(),
             const ParticipantsScreen(),
+            const ProgramsListScreen(),
+            const TeamsScreen(),
+            const SideEventsScreen(),
+            const ScheduleScreen(),
             const MarkCoordinationScreen(),
+            const ClassAttendanceScreen(),
+            const LiveStageScreen(),
+            const ScoreboardScreen(),
             const ReportsScreen(),
             const SettingsScreen(),
           ];
@@ -80,8 +88,8 @@ class MainLayout extends StatelessWidget {
         const SingleActivator(LogicalKeyboardKey.keyD, control: true): () => appState.setTabIndex(0),
         const SingleActivator(LogicalKeyboardKey.keyD, meta: true): () => appState.setTabIndex(0),
         // Programs / Madrasas Directory Shortcut
-        const SingleActivator(LogicalKeyboardKey.keyP, control: true): () => appState.setTabIndex(1),
-        const SingleActivator(LogicalKeyboardKey.keyP, meta: true): () => appState.setTabIndex(1),
+        const SingleActivator(LogicalKeyboardKey.keyP, control: true): () => appState.setTabIndex(appState.userRole == 'Super Admin' ? 1 : 2),
+        const SingleActivator(LogicalKeyboardKey.keyP, meta: true): () => appState.setTabIndex(appState.userRole == 'Super Admin' ? 1 : 2),
         // Toggle Dark/Light Theme Shortcut
         const SingleActivator(LogicalKeyboardKey.keyT, control: true): () => appState.toggleTheme(),
         const SingleActivator(LogicalKeyboardKey.keyT, meta: true): () => appState.toggleTheme(),
@@ -89,27 +97,27 @@ class MainLayout extends StatelessWidget {
         const SingleActivator(LogicalKeyboardKey.keyB, control: true): () => appState.toggleSidebar(),
         const SingleActivator(LogicalKeyboardKey.keyB, meta: true): () => appState.toggleSidebar(),
         // Live Stage / Coordinators Shortcut
-        const SingleActivator(LogicalKeyboardKey.keyL, control: true): () => appState.setTabIndex(appState.userRole == 'Super Admin' ? 2 : 3),
-        const SingleActivator(LogicalKeyboardKey.keyL, meta: true): () => appState.setTabIndex(appState.userRole == 'Super Admin' ? 2 : 3),
+        const SingleActivator(LogicalKeyboardKey.keyL, control: true): () => appState.setTabIndex(appState.userRole == 'Super Admin' ? 2 : 8),
+        const SingleActivator(LogicalKeyboardKey.keyL, meta: true): () => appState.setTabIndex(appState.userRole == 'Super Admin' ? 2 : 8),
         // Reports & Analytics Shortcut
-        const SingleActivator(LogicalKeyboardKey.keyR, control: true): () => appState.setTabIndex(appState.userRole == 'Super Admin' ? 3 : 5),
-        const SingleActivator(LogicalKeyboardKey.keyR, meta: true): () => appState.setTabIndex(appState.userRole == 'Super Admin' ? 3 : 5),
+        const SingleActivator(LogicalKeyboardKey.keyR, control: true): () => appState.setTabIndex(appState.userRole == 'Super Admin' ? 3 : 10),
+        const SingleActivator(LogicalKeyboardKey.keyR, meta: true): () => appState.setTabIndex(appState.userRole == 'Super Admin' ? 3 : 10),
         // Schedule & Timeline Engine Shortcut
         const SingleActivator(LogicalKeyboardKey.keyM, control: true): () {
-          if (appState.userRole != 'Super Admin') appState.setTabIndex(2);
+          if (appState.userRole != 'Super Admin') appState.setTabIndex(5);
         },
         const SingleActivator(LogicalKeyboardKey.keyM, meta: true): () {
-          if (appState.userRole != 'Super Admin') appState.setTabIndex(2);
+          if (appState.userRole != 'Super Admin') appState.setTabIndex(5);
         },
         // Participants Directory Shortcut
-        const SingleActivator(LogicalKeyboardKey.keyF, control: true): () => appState.setTabIndex(appState.userRole == 'Super Admin' ? 2 : 4),
-        const SingleActivator(LogicalKeyboardKey.keyF, meta: true): () => appState.setTabIndex(appState.userRole == 'Super Admin' ? 2 : 4),
+        const SingleActivator(LogicalKeyboardKey.keyF, control: true): () => appState.setTabIndex(appState.userRole == 'Super Admin' ? 2 : 1),
+        const SingleActivator(LogicalKeyboardKey.keyF, meta: true): () => appState.setTabIndex(appState.userRole == 'Super Admin' ? 2 : 1),
         // System Settings Shortcut (Program Coordinator only)
         const SingleActivator(LogicalKeyboardKey.keyS, control: true, shift: true): () {
-          if (appState.userRole != 'Super Admin') appState.setTabIndex(6);
+          if (appState.userRole != 'Super Admin') appState.setTabIndex(11);
         },
         const SingleActivator(LogicalKeyboardKey.keyS, meta: true, shift: true): () {
-          if (appState.userRole != 'Super Admin') appState.setTabIndex(6);
+          if (appState.userRole != 'Super Admin') appState.setTabIndex(11);
         },
         // Auto-Schedule Timings Shortcut
         const SingleActivator(LogicalKeyboardKey.keyH, control: true): () {
@@ -143,9 +151,9 @@ class MainLayout extends StatelessWidget {
                   children: [
                     const HeaderAppBar(),
                     Expanded(
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 250),
-                        child: pages[appState.activeTabIndex.clamp(0, pages.length - 1)],
+                      child: IndexedStack(
+                        index: appState.activeTabIndex.clamp(0, pages.length - 1),
+                        children: pages,
                       ),
                     ),
                   ],

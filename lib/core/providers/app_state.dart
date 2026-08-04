@@ -60,6 +60,12 @@ class AppState extends ChangeNotifier {
   List<ProgramModel> _realPrograms = [];
   List<ProgramModel> get realPrograms => _realPrograms;
 
+  List<PresentModel> _presentRecords = [];
+  List<PresentModel> get presentRecords => _presentRecords;
+
+  List<MarkModel> _markRecords = [];
+  List<MarkModel> get markRecords => _markRecords;
+
   late List<NotificationItem> _notifications;
   List<NotificationItem> get notifications => _notifications;
 
@@ -95,6 +101,8 @@ class AppState extends ChangeNotifier {
     _fetchMadrasasFromFirestore();
     _fetchParticipantsFromFirestore();
     _fetchProgramsFromFirestore();
+    _fetchPresentRecordsFromFirestore();
+    _fetchMarkRecordsFromFirestore();
     generateAutoSchedule();
     _loadUserSession();
   }
@@ -135,6 +143,126 @@ class AppState extends ChangeNotifier {
       });
     } catch (e) {
       debugPrint('Firestore group stream init error: $e');
+    }
+  }
+
+  void _fetchPresentRecordsFromFirestore() {
+    try {
+      FirebaseFirestore.instance
+          .collection('madrasa')
+          .doc(_madrasaId)
+          .collection('present')
+          .snapshots()
+          .listen((snapshot) {
+        _presentRecords = snapshot.docs.map((doc) => PresentModel.fromSnapshot(doc)).toList();
+        notifyListeners();
+      }, onError: (e) {
+        debugPrint('Firestore _fetchPresentRecordsFromFirestore stream error: $e');
+      });
+    } catch (e) {
+      debugPrint('Firestore present stream error: $e');
+    }
+  }
+
+  void _fetchMarkRecordsFromFirestore() {
+    try {
+      FirebaseFirestore.instance
+          .collection('madrasa')
+          .doc(_madrasaId)
+          .collection('mark')
+          .snapshots()
+          .listen((snapshot) {
+        _markRecords = snapshot.docs.map((doc) => MarkModel.fromSnapshot(doc)).toList();
+        notifyListeners();
+      }, onError: (e) {
+        debugPrint('Firestore _fetchMarkRecordsFromFirestore stream error: $e');
+      });
+    } catch (e) {
+      debugPrint('Firestore mark stream error: $e');
+    }
+  }
+
+  Future<bool> saveMarkRecordToFirestore(MarkModel record) async {
+    try {
+      final docRef = FirebaseFirestore.instance
+          .collection('madrasa')
+          .doc(_madrasaId)
+          .collection('mark')
+          .doc(record.docId);
+
+      await docRef.set(record.toMap());
+
+      final idx = _markRecords.indexWhere((r) => r.docId == record.docId);
+      if (idx >= 0) {
+        _markRecords[idx] = record;
+      } else {
+        _markRecords.add(record);
+      }
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error saving mark record to Firestore: $e');
+      return false;
+    }
+  }
+
+  Future<bool> deleteMarkRecordFromFirestore(String docId) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('madrasa')
+          .doc(_madrasaId)
+          .collection('mark')
+          .doc(docId)
+          .delete();
+
+      _markRecords.removeWhere((r) => r.docId == docId);
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error deleting mark record from Firestore: $e');
+      return false;
+    }
+  }
+
+  Future<bool> savePresentRecordToFirestore(PresentModel record) async {
+    try {
+      final docRef = FirebaseFirestore.instance
+          .collection('madrasa')
+          .doc(_madrasaId)
+          .collection('present')
+          .doc(record.docId);
+
+      await docRef.set(record.toMap());
+
+      final idx = _presentRecords.indexWhere((r) => r.docId == record.docId);
+      if (idx >= 0) {
+        _presentRecords[idx] = record;
+      } else {
+        _presentRecords.add(record);
+      }
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error saving present record to Firestore: $e');
+      return false;
+    }
+  }
+
+  Future<bool> deletePresentRecordFromFirestore(String docId) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('madrasa')
+          .doc(_madrasaId)
+          .collection('present')
+          .doc(docId)
+          .delete();
+
+      _presentRecords.removeWhere((r) => r.docId == docId);
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error deleting present record from Firestore: $e');
+      return false;
     }
   }
 

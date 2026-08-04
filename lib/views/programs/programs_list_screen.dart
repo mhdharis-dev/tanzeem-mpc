@@ -489,7 +489,7 @@ class _ProgramsListScreenState extends State<ProgramsListScreen> {
                         context,
                         label: 'Category',
                         value: appState.selectedCategoryFilter,
-                        items: ['All', 'Sub Primary', 'Primary', 'Junior', 'Sub Senior', 'Senior', 'Super Senior'],
+                        items: ['All', 'Sub-Junior' , 'Junior', 'Senior', 'Super Senior'],
                         onChanged: (val) => appState.setCategoryFilter(val!),
                         icon: Icons.workspace_premium_rounded,
                         isDark: isDark,

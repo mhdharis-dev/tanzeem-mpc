@@ -21,15 +21,18 @@ class _CommandPaletteDialogState extends State<CommandPaletteDialog> {
     final isDark = appState.isDarkMode;
 
     final commands = [
-      {'icon': Icons.dashboard_rounded, 'title': 'Go to Dashboard', 'action': () => appState.setTabIndex(0)},
-      {'icon': Icons.list_alt_rounded, 'title': 'View All Programs', 'action': () => appState.setTabIndex(1)},
-      {'icon': Icons.add_circle_outline_rounded, 'title': 'Create New Program', 'action': () => appState.setTabIndex(1)},
-      {'icon': Icons.auto_awesome_rounded, 'title': 'Auto-Generate Schedule', 'action': () => appState.setTabIndex(2)},
-      {'icon': Icons.live_tv_rounded, 'title': 'Open Live Stage LED Display', 'action': () => appState.setTabIndex(3)},
-      {'icon': Icons.people_outline_rounded, 'title': 'View Participants', 'action': () => appState.setTabIndex(4)},
-      {'icon': Icons.domain_rounded, 'title': 'Super Admin - Madrasas', 'action': () => appState.setTabIndex(5)},
-      {'icon': Icons.bar_chart_rounded, 'title': 'Reports & Analytics', 'action': () => appState.setTabIndex(6)},
-      {'icon': Icons.person_outline_rounded, 'title': 'Profile / Settings', 'action': () => appState.setTabIndex(7)},
+      {'icon': Icons.home_rounded, 'title': 'Go to Dashboard', 'action': () => appState.setTabIndex(0)},
+      {'icon': Icons.assignment_ind_rounded, 'title': 'View Participants Directory', 'action': () => appState.setTabIndex(1)},
+      {'icon': Icons.mic_rounded, 'title': 'View All Programs', 'action': () => appState.setTabIndex(2)},
+      {'icon': Icons.groups_rounded, 'title': 'Teams & House Roster', 'action': () => appState.setTabIndex(3)},
+      {'icon': Icons.account_balance_rounded, 'title': 'Side Events & Exhibitions', 'action': () => appState.setTabIndex(4)},
+      {'icon': Icons.calendar_month_rounded, 'title': 'Auto-Generate Schedule', 'action': () => appState.setTabIndex(5)},
+      {'icon': Icons.star_rounded, 'title': 'Mark Coordination', 'action': () => appState.setTabIndex(6)},
+      {'icon': Icons.check_circle_rounded, 'title': 'Hajar / Present Coordination', 'action': () => appState.setTabIndex(7)},
+      {'icon': Icons.live_tv_rounded, 'title': 'Open Live Stage LED Display', 'action': () => appState.setTabIndex(8)},
+      {'icon': Icons.emoji_events_rounded, 'title': 'Championship Scoreboard', 'action': () => appState.setTabIndex(9)},
+      {'icon': Icons.bar_chart_rounded, 'title': 'Reports & Analytics', 'action': () => appState.setTabIndex(10)},
+      {'icon': Icons.person_rounded, 'title': 'Profile / Settings', 'action': () => appState.setTabIndex(11)},
       {
         'icon': isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
         'title': 'Toggle Dark / Light Theme',

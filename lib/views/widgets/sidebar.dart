@@ -23,14 +23,18 @@ class AppSidebar extends StatelessWidget {
             {'icon': Icons.analytics_outlined, 'label': 'Reports'},
           ]
         : [
-            {'icon': Icons.grid_view_rounded, 'label': 'Dashboard'},
-            {'icon': Icons.assignment_outlined, 'label': 'Programs'},
-            {'icon': Icons.event_note_rounded, 'label': 'Schedule'},
+            {'icon': Icons.home_rounded, 'label': 'Dashboard'},
+            {'icon': Icons.assignment_ind_rounded, 'label': 'Participants'},
+            {'icon': Icons.mic_rounded, 'label': 'Programs'},
+            {'icon': Icons.groups_rounded, 'label': 'Teams'},
+            {'icon': Icons.account_balance_rounded, 'label': 'Side Events'},
+            {'icon': Icons.calendar_month_rounded, 'label': 'Schedule'},
+            {'icon': Icons.star_rounded, 'label': 'Mark Coordination'},
+            {'icon': Icons.check_circle_rounded, 'label': 'Present Coordination'},
             {'icon': Icons.live_tv_rounded, 'label': 'Live Stage'},
-            {'icon': Icons.people_alt_outlined, 'label': 'Participants'},
-            {'icon': Icons.grade_rounded, 'label': 'Mark & Present'},
-            {'icon': Icons.analytics_outlined, 'label': 'Reports'},
-            {'icon': Icons.person_outline_rounded, 'label': 'Profile'},
+            {'icon': Icons.emoji_events_rounded, 'label': 'Scoreboard'},
+            {'icon': Icons.bar_chart_rounded, 'label': 'Reports'},
+            {'icon': Icons.person_rounded, 'label': 'Profile'},
           ];
 
     return AnimatedContainer(
@@ -144,7 +148,11 @@ class AppSidebar extends StatelessWidget {
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 6.0),
                   child: InkWell(
-                    onTap: () => appState.setTabIndex(idx),
+                    onTap: () {
+                      if (appState.activeTabIndex != idx) {
+                        appState.setTabIndex(idx);
+                      }
+                    },
                     borderRadius: BorderRadius.circular(14),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
