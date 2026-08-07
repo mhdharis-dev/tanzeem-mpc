@@ -2,6 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/models.dart';
 
+class CustomBreakItem {
+  final String id;
+  final String title;
+  final int durationMinutes;
+  final TimeOfDay breakTime;
+
+  CustomBreakItem({
+    required this.id,
+    required this.title,
+    required this.durationMinutes,
+    required this.breakTime,
+  });
+}
+
 class ScheduleGenerator {
   static List<ScheduleSlot> generateSchedule({
     required List<Program> programs,
@@ -10,21 +24,43 @@ class ScheduleGenerator {
     required TimeOfDay asrTime,
     required int breakDurationMins,
     required int dhuhrDurationMins,
+    List<CustomBreakItem> customBreaks = const [],
+    int fallbackDurationMins = 12,
+    int stageBufferSecs = 60,
+    int participantGapMins = 20,
+    bool autoShiftOnCancel = true,
   }) {
     List<ScheduleSlot> slots = [];
-    
+
     DateTime now = DateTime.now();
     DateTime current = DateTime(now.year, now.month, now.day, startTime.hour, startTime.minute);
-    
+
     final timeFormat = DateFormat('hh:mm a');
     int slotIndex = 1;
 
     for (var i = 0; i < programs.length; i++) {
       var prog = programs[i];
-      
+
+      // Check custom breaks
+      for (var custom in customBreaks) {
+        DateTime customDt = DateTime(now.year, now.month, now.day, custom.breakTime.hour, custom.breakTime.minute);
+        if (current.isAfter(customDt.subtract(const Duration(minutes: 5))) &&
+            !slots.any((s) => s.id == custom.id)) {
+          DateTime breakEnd = current.add(Duration(minutes: custom.durationMinutes));
+          slots.add(ScheduleSlot(
+            id: custom.id,
+            type: SlotType.breakSlot,
+            title: custom.title,
+            startTime: timeFormat.format(current),
+            endTime: timeFormat.format(breakEnd),
+          ));
+          current = breakEnd;
+        }
+      }
+
       // Check if Dhuhr prayer time reached
       DateTime dhuhrDt = DateTime(now.year, now.month, now.day, dhuhrTime.hour, dhuhrTime.minute);
-      if (current.isAfter(dhuhrDt.subtract(const Duration(minutes: 5))) && 
+      if (current.isAfter(dhuhrDt.subtract(const Duration(minutes: 5))) &&
           !slots.any((s) => s.type == SlotType.prayer && s.title.contains('Dhuhr'))) {
         DateTime prayerEnd = current.add(Duration(minutes: dhuhrDurationMins));
         slots.add(ScheduleSlot(
@@ -39,7 +75,7 @@ class ScheduleGenerator {
 
       // Check if Asr prayer time reached
       DateTime asrDt = DateTime(now.year, now.month, now.day, asrTime.hour, asrTime.minute);
-      if (current.isAfter(asrDt.subtract(const Duration(minutes: 5))) && 
+      if (current.isAfter(asrDt.subtract(const Duration(minutes: 5))) &&
           !slots.any((s) => s.type == SlotType.prayer && s.title.contains('Asr'))) {
         DateTime prayerEnd = current.add(const Duration(minutes: 30));
         slots.add(ScheduleSlot(
@@ -56,7 +92,7 @@ class ScheduleGenerator {
       DateTime progEnd = current.add(Duration(minutes: prog.durationMinutes));
       String startStr = timeFormat.format(current);
       String endStr = timeFormat.format(progEnd);
-      
+
       prog.startTime = startStr;
 
       slots.add(ScheduleSlot(
@@ -67,7 +103,7 @@ class ScheduleGenerator {
         endTime: endStr,
         program: prog,
       ));
-      
+
       current = progEnd;
       slotIndex++;
 

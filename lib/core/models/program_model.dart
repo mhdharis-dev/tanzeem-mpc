@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'models.dart';
 
 class ProgramModel {
   final String programId; // e.g. "PRG-001"
@@ -98,6 +99,35 @@ class ProgramModel {
     final count = currentLength + 1;
     final formattedNumber = count.toString().padLeft(3, '0');
     return 'PRG-$formattedNumber';
+  }
+
+  Program toProgram() {
+    int durationMins = 12;
+    final digits = RegExp(r'\d+').firstMatch(duration)?.group(0);
+    if (digits != null) {
+      durationMins = int.tryParse(digits) ?? 12;
+    }
+
+    ProgramStatus progStatus = ProgramStatus.pending;
+    if (status == 'live') progStatus = ProgramStatus.live;
+    if (status == 'completed') progStatus = ProgramStatus.completed;
+    if (status == 'canceled' || status == 'cancelled') progStatus = ProgramStatus.cancelled;
+
+    return Program(
+      id: programId,
+      number: programId.replaceAll('PRG-', '#'),
+      studentName: participantName,
+      studentPhoto: 'https://i.pravatar.cc/150?u=$participantId',
+      studentClass: studentClass,
+      category: category,
+      item: programName,
+      durationMinutes: durationMins,
+      stage: 'Main Stage',
+      status: progStatus,
+      startTime: startTime,
+      teacher: 'Co-ordinator',
+      priority: 'Medium',
+    );
   }
 
   static String formatSecondsToDuration(int totalSeconds) {

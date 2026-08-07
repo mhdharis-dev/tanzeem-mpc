@@ -1,11 +1,13 @@
+// Library: participants_screen.dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../core/models/participant_model.dart';
+import '../../core/models/side_event_model.dart';
+import '../../core/models/team_model.dart';
 import '../../core/providers/app_state.dart';
 import '../../core/theme/app_colors.dart';
-import '../../core/utils/whatsapp_helper.dart';
 import '../widgets/glass_card.dart';
 
 class ParticipantsScreen extends StatefulWidget {
@@ -20,6 +22,351 @@ class _ParticipantsScreenState extends State<ParticipantsScreen> {
   String _selectedCategoryFilter = 'All';
   String _selectedClassFilter = 'All';
   String _selectedGenderFilter = 'All';
+  String _selectedTeamFilter = 'All';
+  String _selectedMedalFilter = 'All';
+  String _selectedParticipationFilter = 'All';
+
+  // --- OPEN STUDENT PARTICIPATED PROGRAMS & SIDE EVENTS MODAL SHEET ---
+  void _openStudentProgramsSheet(BuildContext context, ParticipantModel p, AppState appState) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // Find Team Info
+    TeamModel? studentTeam;
+    Color houseColor = AppColors.primary;
+    String teamName = 'Unassigned';
+
+    final matchedTeams = appState.teamRecords.where((t) => t.members.any((m) => m.participantId == p.participantId)).toList();
+    if (matchedTeams.isNotEmpty) {
+      studentTeam = matchedTeams.first;
+      teamName = studentTeam.teamName;
+      try {
+        houseColor = Color(int.parse(studentTeam.houseColor));
+      } catch (_) {}
+    }
+
+    // Find Side Events
+    int totalPoints = 0;
+    int goldCount = 0;
+    int silverCount = 0;
+    int bronzeCount = 0;
+
+    final studentSideEvents = <Map<String, dynamic>>[];
+    for (var se in appState.sideEventRecords) {
+      final matches = se.participants.where((sp) => sp.participantId == p.participantId).toList();
+      if (matches.isNotEmpty) {
+        final sp = matches.first;
+        totalPoints += sp.point;
+        if (sp.rank == 1 && sp.point > 0) goldCount++;
+        if (sp.rank == 2 && sp.point > 0) silverCount++;
+        if (sp.rank == 3 && sp.point > 0) bronzeCount++;
+
+        studentSideEvents.add({
+          'event': se,
+          'participant': sp,
+        });
+      }
+    }
+
+    // Find Stage Programs
+    final studentPrograms = appState.realPrograms.where((prog) =>
+      prog.participantId == p.participantId ||
+      prog.participantName.toLowerCase() == p.name.toLowerCase()
+    ).toList();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return Container(
+          height: MediaQuery.of(context).size.height * 0.85,
+          decoration: BoxDecoration(
+            color: isDark ? AppColors.cardDark : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            border: Border.all(color: isDark ? AppColors.glassBorderDark : AppColors.glassBorderLight),
+          ),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Handle bar
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white24 : Colors.black12,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Student Summary Card Header
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 28,
+                    backgroundColor: houseColor.withAlpha(30),
+                    child: Text(
+                      p.name.isNotEmpty ? p.name[0].toUpperCase() : 'S',
+                      style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.bold, color: houseColor),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                p.name,
+                                style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold, color: isDark ? AppColors.textLight : AppColors.textDark),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(6)),
+                              child: Text(
+                                'Chest #${p.participantId}',
+                                style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${p.studentClass} (${p.division}) • ${p.category}',
+                          style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.secondary),
+                        ),
+                        const SizedBox(height: 6),
+                        Wrap(
+                          spacing: 10,
+                          runSpacing: 4,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(color: houseColor, borderRadius: BorderRadius.circular(6)),
+                              child: Text(
+                                teamName,
+                                style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
+                              ),
+                            ),
+                            Text('🏆 Total: $totalPoints Pts', style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                            Text('🥇 $goldCount  🥈 $silverCount  🥉 $bronzeCount', style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded),
+                    onPressed: () => Navigator.of(ctx).pop(),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 16),
+              const Divider(height: 1),
+              const SizedBox(height: 12),
+
+              // Tabbed Content: Side Events vs Stage Programs
+              Expanded(
+                child: DefaultTabController(
+                  length: 2,
+                  child: Column(
+                    children: [
+                      TabBar(
+                        labelColor: AppColors.primary,
+                        unselectedLabelColor: isDark ? AppColors.subtextLight : AppColors.subtextDark,
+                        indicatorColor: AppColors.primary,
+                        tabs: [
+                          Tab(text: 'Side Events (${studentSideEvents.length})'),
+                          Tab(text: 'Stage Programs (${studentPrograms.length})'),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      Expanded(
+                        child: TabBarView(
+                          children: [
+                            // 1. SIDE EVENTS LIST
+                            studentSideEvents.isEmpty
+                                ? Center(
+                                    child: Text('No side events registered for this student.', style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
+                                  )
+                                : ListView.separated(
+                                    itemCount: studentSideEvents.length,
+                                    separatorBuilder: (_, _) => const SizedBox(height: 10),
+                                    itemBuilder: (context, idx) {
+                                      final item = studentSideEvents[idx];
+                                      final SideEventModel event = item['event'];
+                                      final SideEventParticipantModel sp = item['participant'];
+                                      final Color eventColor = Color(int.parse(event.sideEventColor));
+
+                                      final rankBadge = sp.rank == 1
+                                          ? '🥇 1st Rank'
+                                          : (sp.rank == 2 ? '🥈 2nd Rank' : (sp.rank == 3 ? '🥉 3rd Rank' : 'Rank #${sp.rank}'));
+
+                                      return Container(
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+                                          borderRadius: BorderRadius.circular(14),
+                                          border: Border.all(color: eventColor.withAlpha(90)),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            // Event Color indicator badge
+                                            Container(
+                                              width: 10,
+                                              height: 48,
+                                              decoration: BoxDecoration(color: eventColor, borderRadius: BorderRadius.circular(6)),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Row(
+                                                    children: [
+                                                      Text(event.sideEventName, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: isDark ? AppColors.textLight : AppColors.textDark)),
+                                                      const SizedBox(width: 8),
+                                                      Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                                        decoration: BoxDecoration(color: eventColor.withAlpha(30), borderRadius: BorderRadius.circular(4)),
+                                                        child: Text(event.sideEventId, style: GoogleFonts.poppins(fontSize: 9, fontWeight: FontWeight.bold, color: eventColor)),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  const SizedBox(height: 3),
+                                                  Text(
+                                                    'Category: ${event.participantsCategory} • Status: ${event.sideEventStatus.toUpperCase()}',
+                                                    style: GoogleFonts.poppins(fontSize: 10.5, color: isDark ? AppColors.subtextLight : AppColors.subtextDark),
+                                                  ),
+                                                  const SizedBox(height: 3),
+                                                  Row(
+                                                    children: [
+                                                      const Icon(Icons.access_time_rounded, size: 12, color: AppColors.warning),
+                                                      const SizedBox(width: 4),
+                                                      Text('${event.scheduledDate} (${event.scheduledTime})', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w600)),
+                                                    ],
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            Column(
+                                              crossAxisAlignment: CrossAxisAlignment.end,
+                                              children: [
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                                  decoration: BoxDecoration(color: AppColors.primary.withAlpha(25), borderRadius: BorderRadius.circular(6)),
+                                                  child: Text(
+                                                    '${sp.point} / ${event.sideEventMaxPoint} Pts',
+                                                    style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary),
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 4),
+                                                Text(rankBadge, style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold)),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                  ),
+
+                            // 2. STAGE PROGRAMS LIST (No event color, student point, or rank)
+                            studentPrograms.isEmpty
+                                ? Center(
+                                    child: Text('No stage programs registered for this student.', style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
+                                  )
+                                : ListView.separated(
+                                    itemCount: studentPrograms.length,
+                                    separatorBuilder: (_, _) => const SizedBox(height: 10),
+                                    itemBuilder: (context, idx) {
+                                      final prog = studentPrograms[idx];
+
+                                      return Container(
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+                                          borderRadius: BorderRadius.circular(14),
+                                          border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.all(10),
+                                              decoration: BoxDecoration(color: AppColors.secondary.withAlpha(25), shape: BoxShape.circle),
+                                              child: const Icon(Icons.mic_external_on_rounded, color: AppColors.secondary, size: 20),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Row(
+                                                    children: [
+                                                      Text(prog.programName, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: isDark ? AppColors.textLight : AppColors.textDark)),
+                                                      const SizedBox(width: 8),
+                                                      Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                                        decoration: BoxDecoration(color: AppColors.secondary.withAlpha(30), borderRadius: BorderRadius.circular(4)),
+                                                        child: Text(prog.programId, style: GoogleFonts.poppins(fontSize: 9, fontWeight: FontWeight.bold, color: AppColors.secondary)),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  const SizedBox(height: 3),
+                                                  Text(
+                                                    'Category: ${prog.category} • Type: ${prog.programType.toUpperCase()}',
+                                                    style: GoogleFonts.poppins(fontSize: 10.5, color: isDark ? AppColors.subtextLight : AppColors.subtextDark),
+                                                  ),
+                                                  const SizedBox(height: 3),
+                                                  Row(
+                                                    children: [
+                                                      const Icon(Icons.schedule_rounded, size: 12, color: AppColors.primary),
+                                                      const SizedBox(width: 4),
+                                                      Text('Start Time: ${prog.startTime} • Duration: ${prog.duration}', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w600)),
+                                                    ],
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                              decoration: BoxDecoration(
+                                                color: prog.status == 'live' ? AppColors.error : (prog.status == 'completed' ? AppColors.success : AppColors.primary),
+                                                borderRadius: BorderRadius.circular(6),
+                                              ),
+                                              child: Text(
+                                                prog.status.toUpperCase(),
+                                                style: GoogleFonts.poppins(fontSize: 9.5, fontWeight: FontWeight.bold, color: Colors.white),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                  ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 
   void _showAddParticipantBottomSheet(BuildContext context, AppState appState) {
     final nextId = ParticipantModel.generateNextParticipantId(appState.realParticipants.length);
@@ -324,6 +671,9 @@ class _ParticipantsScreenState extends State<ParticipantsScreen> {
       _selectedCategoryFilter = 'All';
       _selectedClassFilter = 'All';
       _selectedGenderFilter = 'All';
+      _selectedTeamFilter = 'All';
+      _selectedMedalFilter = 'All';
+      _selectedParticipationFilter = 'All';
     });
   }
 
@@ -334,7 +684,7 @@ class _ParticipantsScreenState extends State<ParticipantsScreen> {
 
     final realParticipants = appState.realParticipants;
 
-    // Filter Logic for Class, Category, Gender, and Search Query
+    // Filter Logic for Class, Category, Gender, Team, Medals, and Participation
     final filteredParticipants = realParticipants.where((p) {
       final q = _searchQuery.trim().toLowerCase();
 
@@ -363,13 +713,55 @@ class _ParticipantsScreenState extends State<ParticipantsScreen> {
         return false;
       }
 
+      // 4. Team / House Filter
+      if (_selectedTeamFilter != 'All') {
+        final matchedTeams = appState.teamRecords.where((t) => t.members.any((m) => m.participantId == p.participantId)).toList();
+        if (_selectedTeamFilter == 'Unassigned') {
+          if (matchedTeams.isNotEmpty) return false;
+        } else {
+          if (matchedTeams.isEmpty || (matchedTeams.first.teamId != _selectedTeamFilter && matchedTeams.first.teamName != _selectedTeamFilter)) {
+            return false;
+          }
+        }
+      }
+
+      // 5. Medal Winners Filter
+      if (_selectedMedalFilter != 'All') {
+        int gold = 0, silver = 0, bronze = 0;
+        for (var se in appState.sideEventRecords) {
+          final matches = se.participants.where((sp) => sp.participantId == p.participantId).toList();
+          if (matches.isNotEmpty && matches.first.point > 0) {
+            if (matches.first.rank == 1) gold++;
+            if (matches.first.rank == 2) silver++;
+            if (matches.first.rank == 3) bronze++;
+          }
+        }
+        if (_selectedMedalFilter == 'Gold' && gold == 0) return false;
+        if (_selectedMedalFilter == 'Silver' && silver == 0) return false;
+        if (_selectedMedalFilter == 'Bronze' && bronze == 0) return false;
+        if (_selectedMedalFilter == 'Winners' && (gold + silver + bronze) == 0) return false;
+      }
+
+      // 6. Participation Filter
+      if (_selectedParticipationFilter != 'All') {
+        bool inSideEvent = appState.sideEventRecords.any((se) => se.participants.any((sp) => sp.participantId == p.participantId));
+        bool inStageProg = appState.realPrograms.any((prog) => prog.participantId == p.participantId || prog.participantName.toLowerCase() == p.name.toLowerCase());
+
+        if (_selectedParticipationFilter == 'SideEvents' && !inSideEvent) return false;
+        if (_selectedParticipationFilter == 'StagePrograms' && !inStageProg) return false;
+        if (_selectedParticipationFilter == 'NoEvents' && (inSideEvent || inStageProg)) return false;
+      }
+
       return true;
     }).toList();
 
     final hasActiveFilters = _searchQuery.isNotEmpty ||
         _selectedCategoryFilter != 'All' ||
         _selectedClassFilter != 'All' ||
-        _selectedGenderFilter != 'All';
+        _selectedGenderFilter != 'All' ||
+        _selectedTeamFilter != 'All' ||
+        _selectedMedalFilter != 'All' ||
+        _selectedParticipationFilter != 'All';
 
     final classOptions = ['All', 'Class 1', 'Class 2', 'Class 3', 'Class 4', 'Class 5', 'Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10','Class 11','Class 12'];
 
@@ -577,6 +969,113 @@ class _ParticipantsScreenState extends State<ParticipantsScreen> {
                           ),
                         ],
                       ),
+
+                      // 4. Team / House Dropdown Filter
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('House Team:', style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w600, color: isDark ? AppColors.subtextLight : AppColors.subtextDark)),
+                          const SizedBox(height: 4),
+                          Container(
+                            height: 38,
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            decoration: BoxDecoration(
+                              color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                value: _selectedTeamFilter,
+                                style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary),
+                                dropdownColor: isDark ? AppColors.cardDark : Colors.white,
+                                items: [
+                                  const DropdownMenuItem(value: 'All', child: Text('All Teams')),
+                                  const DropdownMenuItem(value: 'Unassigned', child: Text('Unassigned Team')),
+                                  ...appState.teamRecords.map((t) {
+                                    return DropdownMenuItem(
+                                      value: t.teamId,
+                                      child: Text(t.teamName),
+                                    );
+                                  }),
+                                ],
+                                onChanged: (val) {
+                                  if (val != null) setState(() => _selectedTeamFilter = val);
+                                },
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      // 5. Medal Winners Dropdown Filter
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Medals & Winners:', style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w600, color: isDark ? AppColors.subtextLight : AppColors.subtextDark)),
+                          const SizedBox(height: 4),
+                          Container(
+                            height: 38,
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            decoration: BoxDecoration(
+                              color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                value: _selectedMedalFilter,
+                                style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary),
+                                dropdownColor: isDark ? AppColors.cardDark : Colors.white,
+                                items: const [
+                                  DropdownMenuItem(value: 'All', child: Text('All Students')),
+                                  DropdownMenuItem(value: 'Gold', child: Text('🥇 1st Rank (Gold)')),
+                                  DropdownMenuItem(value: 'Silver', child: Text('🥈 2nd Rank (Silver)')),
+                                  DropdownMenuItem(value: 'Bronze', child: Text('🥉 3rd Rank (Bronze)')),
+                                  DropdownMenuItem(value: 'Winners', child: Text('🏆 Any Medal Winner')),
+                                ],
+                                onChanged: (val) {
+                                  if (val != null) setState(() => _selectedMedalFilter = val);
+                                },
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      // 6. Event Participation Status Filter
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Participation:', style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w600, color: isDark ? AppColors.subtextLight : AppColors.subtextDark)),
+                          const SizedBox(height: 4),
+                          Container(
+                            height: 38,
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            decoration: BoxDecoration(
+                              color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                value: _selectedParticipationFilter,
+                                style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary),
+                                dropdownColor: isDark ? AppColors.cardDark : Colors.white,
+                                items: const [
+                                  DropdownMenuItem(value: 'All', child: Text('All Participants')),
+                                  DropdownMenuItem(value: 'SideEvents', child: Text('Registered in Side Events')),
+                                  DropdownMenuItem(value: 'StagePrograms', child: Text('Registered in Stage Programs')),
+                                  DropdownMenuItem(value: 'NoEvents', child: Text('No Events Registered')),
+                                ],
+                                onChanged: (val) {
+                                  if (val != null) setState(() => _selectedParticipationFilter = val);
+                                },
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 ],
@@ -649,81 +1148,182 @@ class _ParticipantsScreenState extends State<ParticipantsScreen> {
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                  maxCrossAxisExtent: 380,
+                  maxCrossAxisExtent: 400,
                   mainAxisSpacing: 18,
                   crossAxisSpacing: 18,
-                  mainAxisExtent: 195,
+                  mainAxisExtent: 245,
                 ),
                 itemCount: filteredParticipants.length,
                 itemBuilder: (context, idx) {
                   final p = filteredParticipants[idx];
+
+                  // Find Student Team Info & House Color
+                  TeamModel? studentTeam;
+                  Color houseColor = AppColors.primary;
+                  String teamName = 'Unassigned';
+
+                  final matchedTeams = appState.teamRecords.where((t) => t.members.any((m) => m.participantId == p.participantId)).toList();
+                  if (matchedTeams.isNotEmpty) {
+                    studentTeam = matchedTeams.first;
+                    teamName = studentTeam.teamName;
+                    try {
+                      houseColor = Color(int.parse(studentTeam.houseColor));
+                    } catch (_) {}
+                  }
+
+                  // Find Student Points & Earned Medal Counts
+                  int totalPoints = 0;
+                  int goldCount = 0;
+                  int silverCount = 0;
+                  int bronzeCount = 0;
+
+                  for (var se in appState.sideEventRecords) {
+                    final matches = se.participants.where((sp) => sp.participantId == p.participantId).toList();
+                    if (matches.isNotEmpty) {
+                      final sp = matches.first;
+                      totalPoints += sp.point;
+                      if (sp.rank == 1 && sp.point > 0) goldCount++;
+                      if (sp.rank == 2 && sp.point > 0) silverCount++;
+                      if (sp.rank == 3 && sp.point > 0) bronzeCount++;
+                    }
+                  }
+
                   return GlassCard(
                     borderRadius: 20,
                     padding: const EdgeInsets.all(16),
-                    child: Row(
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        CircleAvatar(
-                          radius: 26,
-                          backgroundColor: AppColors.primary.withAlpha(30),
-                          child: Text(
-                            p.name.isNotEmpty ? p.name[0].toUpperCase() : 'P',
-                            style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.primary),
-                          ),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        // 1. Top Badges Row (Chest Card Badge & Team House Color Badge)
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            // Chest Number Card Badge
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.primary.withAlpha(25),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Text(
-                                      p.participantId,
-                                      style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.primary),
-                                    ),
+                                  const Icon(Icons.badge_rounded, size: 12, color: Colors.white),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Chest #${p.participantId}',
+                                    style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
                                   ),
-                                  if (p.phoneNo.isNotEmpty)
-                                    IconButton(
-                                      icon: const Icon(Icons.chat_bubble_rounded, size: 16, color: Color(0xFF25D366)),
-                                      onPressed: () => WhatsAppHelper.openWhatsAppChat(context: context, phone: p.phoneNo),
-                                      tooltip: 'WhatsApp Parent',
-                                    ),
                                 ],
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                p.name,
-                                style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 14, color: isDark ? AppColors.textLight : AppColors.textDark),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                            ),
+                            // Team Name Badge with House Color
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: houseColor,
+                                borderRadius: BorderRadius.circular(8),
                               ),
-                              Text(
-                                '${p.studentClass} (Div ${p.division}) • ${p.category}',
-                                style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.secondary),
+                              child: Text(
+                                teamName,
+                                style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'Parent: ${p.parentName.isNotEmpty ? p.parentName : 'N/A'}',
-                                style: GoogleFonts.poppins(fontSize: 11, color: isDark ? AppColors.subtextLight : AppColors.subtextDark),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 10),
+
+                        // 2. Main Student Details Row
+                        Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 24,
+                              backgroundColor: houseColor.withAlpha(30),
+                              child: Text(
+                                p.name.isNotEmpty ? p.name[0].toUpperCase() : 'P',
+                                style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 16, color: houseColor),
                               ),
-                              Text(
-                                'Gender: ${p.gender} • Added: ${p.createdAt}',
-                                style: GoogleFonts.poppins(fontSize: 10, color: isDark ? AppColors.subtextLight : AppColors.subtextDark),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    p.name,
+                                    style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13.5, color: isDark ? AppColors.textLight : AppColors.textDark),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  Text(
+                                    '${p.studentClass} (${p.division}) • ${p.category}',
+                                    style: GoogleFonts.poppins(fontSize: 10.5, fontWeight: FontWeight.w600, color: AppColors.secondary),
+                                  ),
+                                  Text(
+                                    'Parent: ${p.parentName.isNotEmpty ? p.parentName : "N/A"}',
+                                    style: GoogleFonts.poppins(fontSize: 10, color: isDark ? AppColors.subtextLight : AppColors.subtextDark),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 10),
+
+                        // 3. Performance Summary Bar (Total Points & Medal Counters)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.emoji_events_rounded, size: 14, color: AppColors.warning),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '$totalPoints Pts',
+                                    style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary),
+                                  ),
+                                ],
+                              ),
+                              Row(
+                                children: [
+                                  Text('🥇 $goldCount', style: GoogleFonts.poppins(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                                  const SizedBox(width: 8),
+                                  Text('🥈 $silverCount', style: GoogleFonts.poppins(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                                  const SizedBox(width: 8),
+                                  Text('🥉 $bronzeCount', style: GoogleFonts.poppins(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                                ],
                               ),
                             ],
+                          ),
+                        ),
+
+                        const Spacer(),
+
+                        // 4. View Programs & Events Action Button (Replaces WhatsApp button)
+                        SizedBox(
+                          width: double.infinity,
+                          height: 36,
+                          child: ElevatedButton.icon(
+                            onPressed: () => _openStudentProgramsSheet(context, p, appState),
+                            icon: const Icon(Icons.event_note_rounded, size: 15),
+                            label: Text('View Programs & Events', style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              padding: EdgeInsets.zero,
+                            ),
                           ),
                         ),
                       ],

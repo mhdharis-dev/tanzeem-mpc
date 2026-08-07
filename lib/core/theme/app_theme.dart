@@ -126,6 +126,19 @@ class AppTheme {
           fontSize: 13,
         ),
       ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: const Color(0xFF27AE60),
+        elevation: 6,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+        ),
+        contentTextStyle: GoogleFonts.poppins(
+          fontWeight: FontWeight.bold,
+          fontSize: 13,
+          color: Colors.white,
+        ),
+      ),
     );
   }
 
@@ -220,6 +233,19 @@ class AppTheme {
             fontWeight: FontWeight.w600,
             fontSize: 14,
           ),
+        ),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: const Color(0xFF27AE60),
+        elevation: 6,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+        ),
+        contentTextStyle: GoogleFonts.poppins(
+          fontWeight: FontWeight.bold,
+          fontSize: 13,
+          color: Colors.white,
         ),
       ),
     );

@@ -1,3 +1,4 @@
+// Library: programs_list_screen.dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -599,7 +600,7 @@ class _ProgramsListScreenState extends State<ProgramsListScreen> {
                                       const SizedBox(width: 12),
                                       SizedBox(width: 90, child: Text('STATUS', style: _headerStyle(isDark))),
                                       const SizedBox(width: 12),
-                                      SizedBox(width: 130, child: Text('ACTIONS', style: _headerStyle(isDark))),
+                                      SizedBox(width: 142, child: Text('ACTIONS', style: _headerStyle(isDark))),
                                     ],
                                   ),
                                 ),
@@ -874,137 +875,142 @@ class _ProgramsListScreenState extends State<ProgramsListScreen> {
                                             ),
                                             const SizedBox(width: 12),
 
-                                            // 11. ACTIONS (130)
+                                            // 11. ACTIONS (142)
                                             SizedBox(
-                                              width: 130,
-                                              child: Row(
-                                                children: [
-                                                  if (prog.status.toLowerCase() == 'pending') ...[
-                                                    Tooltip(
-                                                      message: 'Go Live Now',
-                                                      child: InkWell(
-                                                        onTap: () async {
-                                                          await appState.startProgramLiveInFirestore(prog.programId, prog.madrasaId);
-                                                          if (!context.mounted) return;
-                                                          ScaffoldMessenger.of(context).showSnackBar(
-                                                            SnackBar(
-                                                              content: Text('${prog.programId} is now LIVE on Stage!'),
-                                                              backgroundColor: AppColors.success,
+                                              width: 142,
+                                              child: FittedBox(
+                                                fit: BoxFit.scaleDown,
+                                                alignment: Alignment.centerLeft,
+                                                child: Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    if (prog.status.toLowerCase() == 'pending') ...[
+                                                      Tooltip(
+                                                        message: 'Go Live Now',
+                                                        child: InkWell(
+                                                          onTap: () async {
+                                                            await appState.startProgramLiveInFirestore(prog.programId, prog.madrasaId);
+                                                            if (!context.mounted) return;
+                                                            ScaffoldMessenger.of(context).showSnackBar(
+                                                              SnackBar(
+                                                                content: Text('${prog.programId} is now LIVE on Stage!'),
+                                                                backgroundColor: AppColors.success,
+                                                              ),
+                                                            );
+                                                          },
+                                                          borderRadius: BorderRadius.circular(6),
+                                                          child: Container(
+                                                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
+                                                            decoration: BoxDecoration(
+                                                              color: AppColors.success,
+                                                              borderRadius: BorderRadius.circular(6),
                                                             ),
-                                                          );
-                                                        },
-                                                        borderRadius: BorderRadius.circular(6),
-                                                        child: Container(
-                                                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
-                                                          decoration: BoxDecoration(
-                                                            color: AppColors.success,
-                                                            borderRadius: BorderRadius.circular(6),
-                                                          ),
-                                                          child: Row(
-                                                            children: [
-                                                              const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 13),
-                                                              const SizedBox(width: 2),
-                                                              Text('Live', style: GoogleFonts.poppins(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.bold)),
-                                                            ],
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                    const SizedBox(width: 3),
-                                                    _buildActionButton(
-                                                      icon: Icons.block_rounded,
-                                                      color: Colors.orange,
-                                                      tooltip: 'Cancel Program',
-                                                      onPressed: () => _confirmCancelProgram(context, appState, prog),
-                                                      isDark: isDark,
-                                                    ),
-                                                    const SizedBox(width: 3),
-                                                    _buildActionButton(
-                                                      icon: Icons.edit_rounded,
-                                                      color: AppColors.primary,
-                                                      tooltip: 'Edit Program',
-                                                      onPressed: () => _openAddProgramSheet(context, prog.programType, programToEdit: prog),
-                                                      isDark: isDark,
-                                                    ),
-                                                    const SizedBox(width: 3),
-                                                    _buildActionButton(
-                                                      icon: Icons.delete_outline_rounded,
-                                                      color: AppColors.error,
-                                                      tooltip: 'Delete Program',
-                                                      onPressed: () => _confirmDeleteProgram(context, appState, prog),
-                                                      isDark: isDark,
-                                                    ),
-                                                  ] else if (prog.status.toLowerCase() == 'live') ...[
-                                                    Tooltip(
-                                                      message: 'Stop Live Performance',
-                                                      child: InkWell(
-                                                        onTap: () async {
-                                                          await appState.stopProgramLiveInFirestore(prog.programId, prog.madrasaId);
-                                                          if (!context.mounted) return;
-                                                          ScaffoldMessenger.of(context).showSnackBar(
-                                                            SnackBar(
-                                                              content: Text('${prog.programId} performance completed!'),
-                                                              backgroundColor: AppColors.success,
+                                                            child: Row(
+                                                              children: [
+                                                                const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 13),
+                                                                const SizedBox(width: 2),
+                                                                Text('Live', style: GoogleFonts.poppins(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.bold)),
+                                                              ],
                                                             ),
-                                                          );
-                                                        },
-                                                        borderRadius: BorderRadius.circular(6),
-                                                        child: Container(
-                                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                                          decoration: BoxDecoration(
-                                                            color: AppColors.error,
-                                                            borderRadius: BorderRadius.circular(6),
-                                                          ),
-                                                          child: Row(
-                                                            children: [
-                                                              const Icon(Icons.stop_circle_rounded, color: Colors.white, size: 13),
-                                                              const SizedBox(width: 2),
-                                                              Text('Stop', style: GoogleFonts.poppins(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.bold)),
-                                                            ],
                                                           ),
                                                         ),
                                                       ),
-                                                    ),
-                                                  ] else if (prog.status.toLowerCase() == 'completed') ...[
-                                                    _buildActionButton(
-                                                      icon: Icons.edit_rounded,
-                                                      color: AppColors.primary,
-                                                      tooltip: 'Edit Program',
-                                                      onPressed: () => _openAddProgramSheet(context, prog.programType, programToEdit: prog),
-                                                      isDark: isDark,
-                                                    ),
-                                                    const SizedBox(width: 4),
-                                                    _buildActionButton(
-                                                      icon: Icons.delete_outline_rounded,
-                                                      color: AppColors.error,
-                                                      tooltip: 'Delete Program',
-                                                      onPressed: () => _confirmDeleteProgram(context, appState, prog),
-                                                      isDark: isDark,
-                                                    ),
-                                                  ] else if (prog.status.toLowerCase() == 'cancelled' || prog.status.toLowerCase() == 'canceled') ...[
-                                                    Tooltip(
-                                                      message: 'Restore to Pending',
-                                                      child: InkWell(
-                                                        onTap: () => _confirmUncancelProgram(context, appState, prog),
-                                                        borderRadius: BorderRadius.circular(6),
-                                                        child: Container(
-                                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                                          decoration: BoxDecoration(
-                                                            color: AppColors.secondary,
-                                                            borderRadius: BorderRadius.circular(6),
-                                                          ),
-                                                          child: Row(
-                                                            children: [
-                                                              const Icon(Icons.undo_rounded, color: Colors.white, size: 13),
-                                                              const SizedBox(width: 2),
-                                                              Text('Uncancel', style: GoogleFonts.poppins(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.bold)),
-                                                            ],
+                                                      const SizedBox(width: 3),
+                                                      _buildActionButton(
+                                                        icon: Icons.block_rounded,
+                                                        color: Colors.orange,
+                                                        tooltip: 'Cancel Program',
+                                                        onPressed: () => _confirmCancelProgram(context, appState, prog),
+                                                        isDark: isDark,
+                                                      ),
+                                                      const SizedBox(width: 3),
+                                                      _buildActionButton(
+                                                        icon: Icons.edit_rounded,
+                                                        color: AppColors.primary,
+                                                        tooltip: 'Edit Program',
+                                                        onPressed: () => _openAddProgramSheet(context, prog.programType, programToEdit: prog),
+                                                        isDark: isDark,
+                                                      ),
+                                                      const SizedBox(width: 3),
+                                                      _buildActionButton(
+                                                        icon: Icons.delete_outline_rounded,
+                                                        color: AppColors.error,
+                                                        tooltip: 'Delete Program',
+                                                        onPressed: () => _confirmDeleteProgram(context, appState, prog),
+                                                        isDark: isDark,
+                                                      ),
+                                                    ] else if (prog.status.toLowerCase() == 'live') ...[
+                                                      Tooltip(
+                                                        message: 'Stop Live Performance',
+                                                        child: InkWell(
+                                                          onTap: () async {
+                                                            await appState.stopProgramLiveInFirestore(prog.programId, prog.madrasaId);
+                                                            if (!context.mounted) return;
+                                                            ScaffoldMessenger.of(context).showSnackBar(
+                                                              SnackBar(
+                                                                content: Text('${prog.programId} performance completed!'),
+                                                                backgroundColor: AppColors.success,
+                                                              ),
+                                                            );
+                                                          },
+                                                          borderRadius: BorderRadius.circular(6),
+                                                          child: Container(
+                                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                            decoration: BoxDecoration(
+                                                              color: AppColors.error,
+                                                              borderRadius: BorderRadius.circular(6),
+                                                            ),
+                                                            child: Row(
+                                                              children: [
+                                                                const Icon(Icons.stop_circle_rounded, color: Colors.white, size: 13),
+                                                                const SizedBox(width: 2),
+                                                                Text('Stop', style: GoogleFonts.poppins(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.bold)),
+                                                              ],
+                                                            ),
                                                           ),
                                                         ),
                                                       ),
-                                                    ),
+                                                    ] else if (prog.status.toLowerCase() == 'completed') ...[
+                                                      _buildActionButton(
+                                                        icon: Icons.edit_rounded,
+                                                        color: AppColors.primary,
+                                                        tooltip: 'Edit Program',
+                                                        onPressed: () => _openAddProgramSheet(context, prog.programType, programToEdit: prog),
+                                                        isDark: isDark,
+                                                      ),
+                                                      const SizedBox(width: 4),
+                                                      _buildActionButton(
+                                                        icon: Icons.delete_outline_rounded,
+                                                        color: AppColors.error,
+                                                        tooltip: 'Delete Program',
+                                                        onPressed: () => _confirmDeleteProgram(context, appState, prog),
+                                                        isDark: isDark,
+                                                      ),
+                                                    ] else if (prog.status.toLowerCase() == 'cancelled' || prog.status.toLowerCase() == 'canceled') ...[
+                                                      Tooltip(
+                                                        message: 'Restore to Pending',
+                                                        child: InkWell(
+                                                          onTap: () => _confirmUncancelProgram(context, appState, prog),
+                                                          borderRadius: BorderRadius.circular(6),
+                                                          child: Container(
+                                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                            decoration: BoxDecoration(
+                                                              color: AppColors.secondary,
+                                                              borderRadius: BorderRadius.circular(6),
+                                                            ),
+                                                            child: Row(
+                                                              children: [
+                                                                const Icon(Icons.undo_rounded, color: Colors.white, size: 13),
+                                                                const SizedBox(width: 2),
+                                                                Text('Uncancel', style: GoogleFonts.poppins(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.bold)),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ],
                                                   ],
-                                                ],
+                                                ),
                                               ),
                                             ),
                                           ],

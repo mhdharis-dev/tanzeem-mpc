@@ -21,6 +21,7 @@ class AppSidebar extends StatelessWidget {
             {'icon': Icons.domain_rounded, 'label': 'Madrasas Network'},
             {'icon': Icons.people_alt_outlined, 'label': 'Coordinators'},
             {'icon': Icons.analytics_outlined, 'label': 'Reports'},
+            {'icon': Icons.info_outline_rounded, 'label': 'About'},
           ]
         : [
             {'icon': Icons.home_rounded, 'label': 'Dashboard'},
@@ -33,8 +34,8 @@ class AppSidebar extends StatelessWidget {
             {'icon': Icons.check_circle_rounded, 'label': 'Present Coordination'},
             {'icon': Icons.live_tv_rounded, 'label': 'Live Stage'},
             {'icon': Icons.emoji_events_rounded, 'label': 'Scoreboard'},
-            {'icon': Icons.bar_chart_rounded, 'label': 'Reports'},
             {'icon': Icons.person_rounded, 'label': 'Profile'},
+            {'icon': Icons.info_outline_rounded, 'label': 'About'},
           ];
 
     return AnimatedContainer(

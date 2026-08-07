@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import '../models/models.dart';
+import '../models/side_event_model.dart';
 import '../utils/dummy_data.dart';
 import '../utils/schedule_generator.dart';
 
@@ -66,11 +68,23 @@ class AppState extends ChangeNotifier {
   List<MarkModel> _markRecords = [];
   List<MarkModel> get markRecords => _markRecords;
 
+  List<TeamModel> _teamRecords = [];
+  List<TeamModel> get teamRecords => _teamRecords;
+
+  List<SideEventModel> _sideEventRecords = [];
+  List<SideEventModel> get sideEventRecords => _sideEventRecords;
+
+  List<CeremonialEventModel> _ceremonialEvents = [];
+  List<CeremonialEventModel> get ceremonialEvents => _ceremonialEvents;
+
   late List<NotificationItem> _notifications;
   List<NotificationItem> get notifications => _notifications;
 
   List<ScheduleSlot> _scheduleSlots = [];
   List<ScheduleSlot> get scheduleSlots => _scheduleSlots;
+
+  final List<CustomBreakItem> _customBreaks = [];
+  List<CustomBreakItem> get customBreaks => _customBreaks;
 
   // Live stage countdown state
   int _liveStageProgramIndex = 0;
@@ -93,9 +107,9 @@ class AppState extends ChangeNotifier {
   int defaultDurationMinutes = 12;
 
   AppState() {
-    _programs = List.from(DummyData.initialPrograms);
-    _participants = List.from(DummyData.initialParticipants);
-    _madrasas = List.from(DummyData.initialMadrasas);
+    _programs = [];
+    _participants = [];
+    _madrasas = [];
     _notifications = List.from(DummyData.initialNotifications);
 
     _fetchMadrasasFromFirestore();
@@ -103,14 +117,70 @@ class AppState extends ChangeNotifier {
     _fetchProgramsFromFirestore();
     _fetchPresentRecordsFromFirestore();
     _fetchMarkRecordsFromFirestore();
+    _fetchTeamRecordsFromFirestore();
+    _fetchSideEventsFromFirestore();
+    _fetchCeremonialEventsFromFirestore();
     generateAutoSchedule();
     _loadUserSession();
+  }
+
+  void _fetchCeremonialEventsFromFirestore() {
+    try {
+      FirebaseFirestore.instance
+          .collection('madrasa')
+          .doc(_madrasaId)
+          .collection('ceremonial_events')
+          .snapshots()
+          .listen((snapshot) {
+        _ceremonialEvents = snapshot.docs.map((doc) => CeremonialEventModel.fromSnapshot(doc)).toList();
+        notifyListeners();
+      }, onError: (e) {
+        debugPrint('Firestore _fetchCeremonialEventsFromFirestore error: $e');
+      });
+    } catch (e) {
+      debugPrint('Firestore ceremonial stream init error: $e');
+    }
+  }
+
+  Future<bool> saveCeremonialEventToFirestore(CeremonialEventModel event) async {
+    try {
+      final docRef = FirebaseFirestore.instance
+          .collection('madrasa')
+          .doc(_madrasaId)
+          .collection('ceremonial_events')
+          .doc(event.eventId);
+
+      await docRef.set(event.toMap());
+
+      final idx = _ceremonialEvents.indexWhere((e) => e.eventId == event.eventId);
+      if (idx >= 0) {
+        _ceremonialEvents[idx] = event;
+      } else {
+        _ceremonialEvents.add(event);
+      }
+
+      addSpecialProgram(
+        title: '${event.programName}${event.personName.isNotEmpty ? " - ${event.personName}" : ""}${event.personDesignation.isNotEmpty ? " (${event.personDesignation})" : ""}',
+        category: event.programType,
+        durationMinutes: event.durationMinutes,
+        stage: 'Main Stage',
+      );
+
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error saving ceremonial event to Firestore: $e');
+      return false;
+    }
   }
 
   void _fetchMadrasasFromFirestore() {
     try {
       FirebaseFirestore.instance.collection('madrasa').snapshots().listen((snapshot) {
-        _madrasas = snapshot.docs.map((doc) => MadrasaModel.fromSnapshot(doc)).toList();
+        final fetched = snapshot.docs.map((doc) => MadrasaModel.fromSnapshot(doc)).toList();
+        if (fetched.isNotEmpty) {
+          _madrasas = fetched;
+        }
         notifyListeners();
       }, onError: (e) {
         debugPrint('Firestore _fetchMadrasasFromFirestore stream error: $e');
@@ -124,6 +194,9 @@ class AppState extends ChangeNotifier {
     try {
       FirebaseFirestore.instance.collectionGroup('participants').snapshots().listen((snapshot) {
         _realParticipants = snapshot.docs.map((doc) => ParticipantModel.fromSnapshot(doc)).toList();
+        if (_realParticipants.isNotEmpty) {
+          _participants = _realParticipants.map((p) => p.toParticipant()).toList();
+        }
         notifyListeners();
       }, onError: (e) {
         debugPrint('Firestore _fetchParticipantsFromFirestore group stream error: $e');
@@ -137,6 +210,10 @@ class AppState extends ChangeNotifier {
     try {
       FirebaseFirestore.instance.collectionGroup('programs').snapshots().listen((snapshot) {
         _realPrograms = snapshot.docs.map((doc) => ProgramModel.fromSnapshot(doc)).toList();
+        if (_realPrograms.isNotEmpty) {
+          _programs = _realPrograms.map((p) => p.toProgram()).toList();
+          generateAutoSchedule();
+        }
         notifyListeners();
       }, onError: (e) {
         debugPrint('Firestore _fetchProgramsFromFirestore group stream error: $e');
@@ -179,6 +256,449 @@ class AppState extends ChangeNotifier {
       });
     } catch (e) {
       debugPrint('Firestore mark stream error: $e');
+    }
+  }
+
+  void _fetchTeamRecordsFromFirestore() {
+    try {
+      FirebaseFirestore.instance
+          .collection('madrasa')
+          .doc(_madrasaId)
+          .collection('teams')
+          .snapshots()
+          .listen((snapshot) {
+        _teamRecords = snapshot.docs.map((doc) => TeamModel.fromMap(doc.data())).toList();
+        TeamModel.calculateTiedRanks(_teamRecords);
+        recalculateAllTeamScoresAndMedals();
+        notifyListeners();
+      }, onError: (e) {
+        debugPrint('Firestore _fetchTeamRecordsFromFirestore stream error: $e');
+      });
+    } catch (e) {
+      debugPrint('Firestore teams stream error: $e');
+    }
+  }
+
+  Future<bool> saveTeamRecordToFirestore(TeamModel record) async {
+    try {
+      final docRef = FirebaseFirestore.instance
+          .collection('madrasa')
+          .doc(_madrasaId)
+          .collection('teams')
+          .doc(record.teamId);
+
+      await docRef.set(record.toMap());
+
+      final idx = _teamRecords.indexWhere((r) => r.teamId == record.teamId);
+      if (idx >= 0) {
+        _teamRecords[idx] = record;
+      } else {
+        _teamRecords.add(record);
+      }
+      TeamModel.calculateTiedRanks(_teamRecords);
+      recalculateAllTeamScoresAndMedals();
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error saving team record to Firestore: $e');
+      return false;
+    }
+  }
+
+  Future<bool> deleteTeamRecordFromFirestore(String teamId) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('madrasa')
+          .doc(_madrasaId)
+          .collection('teams')
+          .doc(teamId)
+          .delete();
+
+      _teamRecords.removeWhere((r) => r.teamId == teamId);
+      TeamModel.calculateTiedRanks(_teamRecords);
+      recalculateAllTeamScoresAndMedals();
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error deleting team record from Firestore: $e');
+      return false;
+    }
+  }
+
+  void _fetchSideEventsFromFirestore() {
+    try {
+      FirebaseFirestore.instance
+          .collection('madrasa')
+          .doc(_madrasaId)
+          .collection('side_events')
+          .snapshots()
+          .listen((snapshot) async {
+        _sideEventRecords = snapshot.docs.map((doc) => SideEventModel.fromMap(doc.data())).toList();
+
+        // Merge any uncompleted local drafts from SharedPreferences
+        final prefs = await SharedPreferences.getInstance();
+        for (int i = 0; i < _sideEventRecords.length; i++) {
+          final key = 'draft_side_event_${_sideEventRecords[i].sideEventId}';
+          if (_sideEventRecords[i].sideEventStatus != 'completed' && prefs.containsKey(key)) {
+            final draftJson = prefs.getString(key);
+            if (draftJson != null) {
+              try {
+                final Map<String, dynamic> map = jsonDecode(draftJson);
+                _sideEventRecords[i] = SideEventModel.fromMap(map);
+              } catch (e) {
+                debugPrint('Error parsing local side event draft: $e');
+              }
+            }
+          }
+        }
+
+        recalculateAllTeamScoresAndMedals();
+        notifyListeners();
+      }, onError: (e) {
+        debugPrint('Firestore _fetchSideEventsFromFirestore stream error: $e');
+      });
+    } catch (e) {
+      debugPrint('Firestore side_events stream error: $e');
+    }
+  }
+
+  // --- SAVE SIDE EVENT SCORE SHEET ACCORDING TO STATUS RULE ---
+  // If status is 'completed' -> Commit to Cloud Firestore & recalculate team scores/medals.
+  // Otherwise ('live now' or 'pending') -> Save draft locally in SharedPreferences.
+  Future<bool> saveSideEventRecordWithStatusRule(SideEventModel record) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'draft_side_event_${record.sideEventId}';
+
+      if (record.sideEventStatus == 'completed') {
+        // COMMIT TO FIRESTORE ON COMPLETED
+        final docRef = FirebaseFirestore.instance
+            .collection('madrasa')
+            .doc(_madrasaId)
+            .collection('side_events')
+            .doc(record.sideEventId);
+
+        await docRef.set(record.toMap());
+
+        // Remove local draft
+        await prefs.remove(key);
+
+        final idx = _sideEventRecords.indexWhere((r) => r.sideEventId == record.sideEventId);
+        if (idx >= 0) {
+          _sideEventRecords[idx] = record;
+        } else {
+          _sideEventRecords.add(record);
+        }
+        await recalculateAllTeamScoresAndMedals();
+        notifyListeners();
+        return true;
+      } else {
+        // DRAFT SAVE LOCALLY IN SHAREDPREFERENCES
+        final jsonStr = jsonEncode(record.toMap());
+        await prefs.setString(key, jsonStr);
+
+        final idx = _sideEventRecords.indexWhere((r) => r.sideEventId == record.sideEventId);
+        if (idx >= 0) {
+          _sideEventRecords[idx] = record;
+        } else {
+          _sideEventRecords.add(record);
+        }
+        notifyListeners();
+        return true;
+      }
+    } catch (e) {
+      debugPrint('Error in saveSideEventRecordWithStatusRule: $e');
+      return false;
+    }
+  }
+
+  Future<bool> saveSideEventRecordToFirestore(SideEventModel record) async {
+    try {
+      final docRef = FirebaseFirestore.instance
+          .collection('madrasa')
+          .doc(_madrasaId)
+          .collection('side_events')
+          .doc(record.sideEventId);
+
+      await docRef.set(record.toMap());
+
+      final idx = _sideEventRecords.indexWhere((r) => r.sideEventId == record.sideEventId);
+      if (idx >= 0) {
+        _sideEventRecords[idx] = record;
+      } else {
+        _sideEventRecords.add(record);
+      }
+
+      if (record.sideEventStatus == 'completed') {
+        await recalculateAllTeamScoresAndMedals();
+      }
+
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error saving side event record to Firestore: $e');
+      return false;
+    }
+  }
+
+  // --- RECALCULATE ALL TEAM POINTS & MEDAL TALLY IN CLOUD FIRESTORE ---
+  Future<void> recalculateAllTeamScoresAndMedals() async {
+    if (_teamRecords.isEmpty) return;
+
+    for (var team in _teamRecords) {
+      int totalPts = 0;
+      int firstCnt = 0;
+      int secondCnt = 0;
+      int thirdCnt = 0;
+      List<TeamMedalWinnerModel> firstList = [];
+      List<TeamMedalWinnerModel> secondList = [];
+      List<TeamMedalWinnerModel> thirdList = [];
+
+      for (var se in _sideEventRecords) {
+        // ONLY INCLUDE COMPLETED SIDE EVENTS WHEN UPDATING FIRESTORE TEAM SCORES AND MEDALS
+        if (se.sideEventStatus == 'completed') {
+          for (var p in se.participants) {
+            bool isInTeam = p.teamId == team.teamId || team.members.any((m) => m.participantId == p.participantId);
+            if (isInTeam) {
+              totalPts += p.point;
+
+              if (p.rank == 1 && p.point > 0) {
+                firstCnt++;
+                firstList.add(TeamMedalWinnerModel(
+                  participantId: p.participantId,
+                  participantName: p.participantName,
+                  participantClass: p.participantClass,
+                  participantDiv: p.participantDiv,
+                  sideEventId: se.sideEventId,
+                ));
+              } else if (p.rank == 2 && p.point > 0) {
+                secondCnt++;
+                secondList.add(TeamMedalWinnerModel(
+                  participantId: p.participantId,
+                  participantName: p.participantName,
+                  participantClass: p.participantClass,
+                  participantDiv: p.participantDiv,
+                  sideEventId: se.sideEventId,
+                ));
+              } else if (p.rank == 3 && p.point > 0) {
+                thirdCnt++;
+                thirdList.add(TeamMedalWinnerModel(
+                  participantId: p.participantId,
+                  participantName: p.participantName,
+                  participantClass: p.participantClass,
+                  participantDiv: p.participantDiv,
+                  sideEventId: se.sideEventId,
+                ));
+              }
+            }
+          }
+        }
+      }
+
+      final updatedTeam = TeamModel(
+        teamId: team.teamId,
+        teamName: team.teamName,
+        teamHouse: team.teamHouse,
+        houseColor: team.houseColor,
+        teamCaptain: team.teamCaptain,
+        teamViceCaptain: team.teamViceCaptain,
+        totalMembers: team.members.length,
+        overallPoint: totalPts,
+        members: team.members,
+        overallMedals: TeamMedalsModel(
+          firstCount: firstCnt,
+          firstMedals: firstList,
+          secondCount: secondCnt,
+          secondMedals: secondList,
+          thirdCount: thirdCnt,
+          thirdMedals: thirdList,
+        ),
+      );
+
+      final docRef = FirebaseFirestore.instance
+          .collection('madrasa')
+          .doc(_madrasaId)
+          .collection('teams')
+          .doc(team.teamId);
+
+      await docRef.set(updatedTeam.toMap());
+
+      final idx = _teamRecords.indexWhere((r) => r.teamId == team.teamId);
+      if (idx >= 0) {
+        _teamRecords[idx] = updatedTeam;
+      }
+    }
+
+    TeamModel.calculateTiedRanks(_teamRecords);
+  }
+
+  // --- DELETE TEAM RECORD FROM FIRESTORE & UNASSIGN MEMBERS ---
+  Future<void> deleteTeamFromFirestore(String teamId) async {
+    try {
+      // 1. Delete team document from Cloud Firestore
+      await FirebaseFirestore.instance
+          .collection('madrasa')
+          .doc(_madrasaId)
+          .collection('teams')
+          .doc(teamId)
+          .delete();
+
+      // 2. Unassign teamId and teamName (set to '') for all participants in side events
+      for (var se in _sideEventRecords) {
+        bool isModified = false;
+        for (var p in se.participants) {
+          if (p.teamId == teamId) {
+            p.teamId = '';
+            p.teamName = '';
+            isModified = true;
+          }
+        }
+        for (var r in se.rounds) {
+          for (var rp in r.participants) {
+            if (rp.teamId == teamId) {
+              rp.teamId = '';
+              rp.teamName = '';
+              isModified = true;
+            }
+          }
+        }
+        if (isModified) {
+          await saveSideEventRecordToFirestore(se);
+        }
+      }
+
+      // 3. Remove team from local memory
+      _teamRecords.removeWhere((t) => t.teamId == teamId);
+
+      // 4. Recalculate standings and notify
+      await recalculateAllTeamScoresAndMedals();
+      notifyListeners();
+    } catch (e) {
+      debugPrint("Error deleting team $teamId: $e");
+    }
+  }
+
+  // --- REASSIGN STUDENT TEAM (UPDATES SIDE EVENTS IN FIRESTORE & TRANSFERS SCORE/MEDALS) ---
+  Future<void> assignStudentToTeam({
+    required String studentId,
+    required String studentName,
+    required String studentClass,
+    required String studentDiv,
+    required TeamModel newTeam,
+  }) async {
+    // 1. Remove student from any existing team (Old Team)
+    for (var t in _teamRecords) {
+      if (t.teamId != newTeam.teamId && t.members.any((m) => m.participantId == studentId)) {
+        t.members.removeWhere((m) => m.participantId == studentId);
+        final updatedOldTeam = TeamModel(
+          teamId: t.teamId,
+          teamName: t.teamName,
+          teamHouse: t.teamHouse,
+          houseColor: t.houseColor,
+          teamCaptain: t.teamCaptain,
+          teamViceCaptain: t.teamViceCaptain,
+          totalMembers: t.members.length,
+          overallPoint: t.overallPoint,
+          members: t.members,
+          overallMedals: t.overallMedals,
+        );
+        await saveTeamRecordToFirestore(updatedOldTeam);
+      }
+    }
+
+    // 2. Add to New Team
+    if (!newTeam.members.any((m) => m.participantId == studentId)) {
+      newTeam.members.add(
+        TeamMemberModel(
+          participantId: studentId,
+          participantName: studentName,
+          participantClass: studentClass,
+          participantDiv: studentDiv,
+        ),
+      );
+      await saveTeamRecordToFirestore(newTeam);
+    }
+
+    // 3. Update all Side Events in Firestore with new teamId and teamName
+    String matchedTeamName = '${newTeam.teamName} (${newTeam.teamHouse})';
+    for (var se in _sideEventRecords) {
+      bool isModified = false;
+      for (var p in se.participants) {
+        if (p.participantId == studentId) {
+          p.teamId = newTeam.teamId;
+          p.teamName = matchedTeamName;
+          isModified = true;
+        }
+      }
+      for (var r in se.rounds) {
+        for (var rp in r.participants) {
+          if (rp.participantId == studentId) {
+            rp.teamId = newTeam.teamId;
+            rp.teamName = matchedTeamName;
+            isModified = true;
+          }
+        }
+      }
+      if (isModified) {
+        await saveSideEventRecordToFirestore(se);
+      }
+    }
+
+    // 4. Recalculate all scores & medals across teams
+    await recalculateAllTeamScoresAndMedals();
+    notifyListeners();
+  }
+
+  Future<void> removeStudentFromTeam({
+    required String studentId,
+    required TeamModel team,
+  }) async {
+    team.members.removeWhere((m) => m.participantId == studentId);
+    await saveTeamRecordToFirestore(team);
+
+    // Clear teamId and teamName from Side Events in Firestore
+    for (var se in _sideEventRecords) {
+      bool isModified = false;
+      for (var p in se.participants) {
+        if (p.participantId == studentId) {
+          p.teamId = '';
+          p.teamName = '';
+          isModified = true;
+        }
+      }
+      for (var r in se.rounds) {
+        for (var rp in r.participants) {
+          if (rp.participantId == studentId) {
+            rp.teamId = '';
+            rp.teamName = '';
+            isModified = true;
+          }
+        }
+      }
+      if (isModified) {
+        await saveSideEventRecordToFirestore(se);
+      }
+    }
+
+    await recalculateAllTeamScoresAndMedals();
+    notifyListeners();
+  }
+
+  Future<bool> deleteSideEventRecordFromFirestore(String sideEventId) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('madrasa')
+          .doc(_madrasaId)
+          .collection('side_events')
+          .doc(sideEventId)
+          .delete();
+
+      _sideEventRecords.removeWhere((r) => r.sideEventId == sideEventId);
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error deleting side event record from Firestore: $e');
+      return false;
     }
   }
 
@@ -764,8 +1284,46 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  void resetManualProgramOrder() {
+    _programs = List.from(DummyData.initialPrograms);
+    generateAutoSchedule();
+    notifyListeners();
+  }
+
+  void addSpecialProgram({
+    required String title,
+    required String category,
+    required int durationMinutes,
+    required String stage,
+  }) {
+    final newId = 'special-${DateTime.now().millisecondsSinceEpoch}';
+    final newProg = Program(
+      id: newId,
+      number: 'SP-${_programs.length + 1}',
+      studentName: 'Committee / Inaugural Event',
+      studentPhoto: '',
+      studentClass: 'Ceremonial',
+      category: category,
+      item: title,
+      durationMinutes: durationMinutes,
+      stage: stage,
+      status: ProgramStatus.pending,
+      startTime: '08:30 AM',
+      teacher: 'Festival Committee',
+      priority: 'High',
+    );
+    _programs.insert(0, newProg);
+    generateAutoSchedule();
+    notifyListeners();
+  }
+
   // Automatic Schedule Generation
-  void generateAutoSchedule() {
+  void generateAutoSchedule({
+    int fallbackDurationMins = 12,
+    int stageBufferSecs = 60,
+    int participantGapMins = 20,
+    bool autoShiftOnCancel = true,
+  }) {
     _scheduleSlots = ScheduleGenerator.generateSchedule(
       programs: _programs,
       startTime: defaultStartTime,
@@ -773,8 +1331,23 @@ class AppState extends ChangeNotifier {
       asrTime: asrPrayerTime,
       breakDurationMins: 15,
       dhuhrDurationMins: 45,
+      customBreaks: _customBreaks,
+      fallbackDurationMins: fallbackDurationMins,
+      stageBufferSecs: stageBufferSecs,
+      participantGapMins: participantGapMins,
+      autoShiftOnCancel: autoShiftOnCancel,
     );
     notifyListeners();
+  }
+
+  void addCustomBreak(CustomBreakItem breakItem) {
+    _customBreaks.add(breakItem);
+    generateAutoSchedule();
+  }
+
+  void removeCustomBreak(String id) {
+    _customBreaks.removeWhere((b) => b.id == id);
+    generateAutoSchedule();
   }
 
   // Live Timer Controls

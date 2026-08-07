@@ -4,6 +4,8 @@ export 'participant_model.dart';
 export 'program_model.dart';
 export 'present_model.dart';
 export 'mark_model.dart';
+export 'ceremonial_event_model.dart';
+export 'team_model.dart';
 
 enum ProgramStatus { pending, live, completed, cancelled }
 

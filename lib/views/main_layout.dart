@@ -1,3 +1,4 @@
+// Library: main_layout.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -22,6 +23,7 @@ import 'coordination/mark_coordination_screen.dart';
 import 'coordination/class_attendance_screen.dart';
 import 'reports/reports_screen.dart';
 import 'settings/settings_screen.dart';
+import 'about/about_screen.dart';
 
 import 'widgets/logout_dialog.dart';
 
@@ -39,6 +41,7 @@ class MainLayout extends StatelessWidget {
             const SuperAdminScreen(),
             const CoordinatorsScreen(),
             const ReportsScreen(),
+            const AboutScreen(),
           ]
         : [
             const DashboardScreen(),
@@ -51,8 +54,8 @@ class MainLayout extends StatelessWidget {
             const ClassAttendanceScreen(),
             const LiveStageScreen(),
             const ScoreboardScreen(),
-            const ReportsScreen(),
             const SettingsScreen(),
+            const AboutScreen(),
           ];
 
     void openCommandPalette() {
@@ -99,9 +102,9 @@ class MainLayout extends StatelessWidget {
         // Live Stage / Coordinators Shortcut
         const SingleActivator(LogicalKeyboardKey.keyL, control: true): () => appState.setTabIndex(appState.userRole == 'Super Admin' ? 2 : 8),
         const SingleActivator(LogicalKeyboardKey.keyL, meta: true): () => appState.setTabIndex(appState.userRole == 'Super Admin' ? 2 : 8),
-        // Reports & Analytics Shortcut
-        const SingleActivator(LogicalKeyboardKey.keyR, control: true): () => appState.setTabIndex(appState.userRole == 'Super Admin' ? 3 : 10),
-        const SingleActivator(LogicalKeyboardKey.keyR, meta: true): () => appState.setTabIndex(appState.userRole == 'Super Admin' ? 3 : 10),
+        // Reports / Scoreboard Shortcut
+        const SingleActivator(LogicalKeyboardKey.keyR, control: true): () => appState.setTabIndex(appState.userRole == 'Super Admin' ? 3 : 9),
+        const SingleActivator(LogicalKeyboardKey.keyR, meta: true): () => appState.setTabIndex(appState.userRole == 'Super Admin' ? 3 : 9),
         // Schedule & Timeline Engine Shortcut
         const SingleActivator(LogicalKeyboardKey.keyM, control: true): () {
           if (appState.userRole != 'Super Admin') appState.setTabIndex(5);
@@ -114,10 +117,10 @@ class MainLayout extends StatelessWidget {
         const SingleActivator(LogicalKeyboardKey.keyF, meta: true): () => appState.setTabIndex(appState.userRole == 'Super Admin' ? 2 : 1),
         // System Settings Shortcut (Program Coordinator only)
         const SingleActivator(LogicalKeyboardKey.keyS, control: true, shift: true): () {
-          if (appState.userRole != 'Super Admin') appState.setTabIndex(11);
+          if (appState.userRole != 'Super Admin') appState.setTabIndex(10);
         },
         const SingleActivator(LogicalKeyboardKey.keyS, meta: true, shift: true): () {
-          if (appState.userRole != 'Super Admin') appState.setTabIndex(11);
+          if (appState.userRole != 'Super Admin') appState.setTabIndex(10);
         },
         // Auto-Schedule Timings Shortcut
         const SingleActivator(LogicalKeyboardKey.keyH, control: true): () {
@@ -151,7 +154,7 @@ class MainLayout extends StatelessWidget {
                   children: [
                     const HeaderAppBar(),
                     Expanded(
-                      child: IndexedStack(
+                      child: LazyIndexedStack(
                         index: appState.activeTabIndex.clamp(0, pages.length - 1),
                         children: pages,
                       ),
@@ -163,6 +166,51 @@ class MainLayout extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class LazyIndexedStack extends StatefulWidget {
+  final int index;
+  final List<Widget> children;
+
+  const LazyIndexedStack({
+    super.key,
+    required this.index,
+    required this.children,
+  });
+
+  @override
+  State<LazyIndexedStack> createState() => _LazyIndexedStackState();
+}
+
+class _LazyIndexedStackState extends State<LazyIndexedStack> {
+  late List<bool> _activated;
+
+  @override
+  void initState() {
+    super.initState();
+    _activated = List<bool>.generate(widget.children.length, (i) => i == widget.index);
+  }
+
+  @override
+  void didUpdateWidget(LazyIndexedStack oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.children.length != _activated.length) {
+      _activated = List<bool>.generate(widget.children.length, (i) => i == widget.index || (i < _activated.length && _activated[i]));
+    }
+    if (widget.index >= 0 && widget.index < _activated.length && !_activated[widget.index]) {
+      _activated[widget.index] = true;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IndexedStack(
+      index: widget.index,
+      children: List.generate(widget.children.length, (i) {
+        return _activated[i] ? widget.children[i] : const SizedBox.shrink();
+      }),
     );
   }
 }

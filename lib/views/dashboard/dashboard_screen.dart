@@ -1,3 +1,4 @@
+// Library: dashboard_screen.dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -5,7 +6,6 @@ import 'package:intl/intl.dart';
 import '../../core/models/models.dart';
 import '../../core/providers/app_state.dart';
 import '../../core/theme/app_colors.dart';
-import '../../core/utils/whatsapp_helper.dart';
 import '../widgets/glass_card.dart';
 
 class DashboardScreen extends StatelessWidget {
@@ -17,22 +17,37 @@ class DashboardScreen extends StatelessWidget {
     final isDark = appState.isDarkMode;
     final isSuperAdmin = appState.userRole == 'Super Admin';
 
+    // Real Data calculations from AppState
     final totalMadrasas = appState.madrasas.length;
     final onlineCoordinators = appState.madrasas.where((m) => m.isOnline).length;
+
     final totalProgs = appState.programs.length;
     final completedProgs = appState.programs.where((p) => p.status == ProgramStatus.completed).length;
     final pendingProgs = appState.programs.where((p) => p.status == ProgramStatus.pending).length;
     final liveProgs = appState.programs.where((p) => p.status == ProgramStatus.live).length;
 
+    final totalParticipants = appState.participants.length;
+    final presentCount = appState.presentRecords.length;
+    final markCount = appState.markRecords.length;
+    final teamRecords = appState.teamRecords;
+    final scheduleSlots = appState.scheduleSlots;
+
     final dateStr = DateFormat('EEEE, MMMM d, yyyy').format(DateTime.now());
+
+    // Top Team Leaderboard Calculation
+    TeamModel? leadingTeam;
+    if (teamRecords.isNotEmpty) {
+      final sorted = List<TeamModel>.from(teamRecords)..sort((a, b) => b.overallPoint.compareTo(a.overallPoint));
+      leadingTeam = sorted.first;
+    }
 
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.all(28.0),
+      padding: const EdgeInsets.all(24.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Top Welcome Hero Section Card
+          // --- 1. HERO WELCOME GRADIENT GLASS HEADER ---
           GlassCard(
             borderRadius: 24,
             padding: const EdgeInsets.all(28),
@@ -69,9 +84,9 @@ class DashboardScreen extends StatelessWidget {
                               runSpacing: 6,
                               children: [
                                 Text(
-                                  isSuperAdmin ? 'Welcome, Super Admin 👑' : 'Good Morning, Coordinator 👋',
+                                  isSuperAdmin ? 'Welcome, Super Admin 👑' : 'Coordinator Control Dashboard 👋',
                                   style: GoogleFonts.poppins(
-                                    fontSize: 26,
+                                    fontSize: 24,
                                     fontWeight: FontWeight.bold,
                                     color: isDark ? AppColors.textLight : AppColors.textDark,
                                   ),
@@ -86,7 +101,7 @@ class DashboardScreen extends StatelessWidget {
                                     ),
                                   ),
                                   child: Text(
-                                    isSuperAdmin ? 'SUPER ADMIN' : 'MEELAD 2026',
+                                    isSuperAdmin ? 'SUPER ADMIN' : appState.madrasaName,
                                     style: GoogleFonts.poppins(
                                       fontSize: 11,
                                       fontWeight: FontWeight.bold,
@@ -98,20 +113,18 @@ class DashboardScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              isSuperAdmin
-                                  ? '$dateStr  •  Central Zone Administration Portal'
-                                  : '$dateStr  •  Venue: Grand Auditorium Stage A',
+                              '$dateStr  •  Meelad Coordinator Hub  •  Grand Auditorium',
                               style: GoogleFonts.poppins(
-                                fontSize: 14,
+                                fontSize: 13,
                                 color: isDark ? AppColors.subtextLight : AppColors.subtextDark,
                               ),
                             ),
                           ],
                         ),
 
-                        // System Status Badge Card
+                        // System Status Pill Card
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                           decoration: BoxDecoration(
                             color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
                             borderRadius: BorderRadius.circular(16),
@@ -120,29 +133,34 @@ class DashboardScreen extends StatelessWidget {
                             ),
                           ),
                           child: Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(
-                                isSuperAdmin ? Icons.cloud_done_rounded : Icons.wb_sunny_rounded,
-                                color: isSuperAdmin ? AppColors.success : AppColors.accent,
-                                size: 28,
+                              Container(
+                                width: 10,
+                                height: 10,
+                                decoration: const BoxDecoration(
+                                  color: AppColors.success,
+                                  shape: BoxShape.circle,
+                                ),
                               ),
-                              const SizedBox(width: 12),
+                              const SizedBox(width: 8),
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    isSuperAdmin ? 'Firestore Live Sync' : '28°C Calicut',
+                                    'Cloud Firestore Live Sync',
                                     style: GoogleFonts.poppins(
                                       fontWeight: FontWeight.bold,
-                                      fontSize: 14,
+                                      fontSize: 12.5,
                                       color: isDark ? AppColors.textLight : AppColors.textDark,
                                     ),
                                   ),
                                   Text(
-                                    isSuperAdmin ? '$totalMadrasas Madrasas Connected' : 'Clear Sky • Humidity 62%',
+                                    '$totalMadrasas Madrasas Network Connected',
                                     style: GoogleFonts.poppins(
-                                      fontSize: 11,
-                                      color: isDark ? AppColors.subtextLight : AppColors.subtextDark,
+                                      fontSize: 10.5,
+                                      color: AppColors.success,
+                                      fontWeight: FontWeight.w600,
                                     ),
                                   ),
                                 ],
@@ -153,69 +171,61 @@ class DashboardScreen extends StatelessWidget {
                       ],
                     ),
 
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 20),
 
-                    // Quick Action Navigation Buttons
+                    // Quick Nav Action Chips Row
                     Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      children: isSuperAdmin
-                          ? [
-                              ElevatedButton.icon(
-                                onPressed: () => appState.setTabIndex(1), // Madrasas Network tab
-                                icon: const Icon(Icons.domain_rounded, size: 18),
-                                label: const Text('Manage Madrasa Network'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.primary,
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                                ),
-                              ),
-                              OutlinedButton.icon(
-                                onPressed: () => appState.setTabIndex(2), // Coordinators Directory tab
-                                icon: const Icon(Icons.people_alt_outlined, size: 18),
-                                label: const Text('Coordinators Directory'),
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                                ),
-                              ),
-                              OutlinedButton.icon(
-                                onPressed: () => appState.setTabIndex(3), // Reports tab
-                                icon: const Icon(Icons.analytics_outlined, size: 18),
-                                label: const Text('System Audit Reports'),
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                                ),
-                              ),
-                            ]
-                          : [
-                              ElevatedButton.icon(
-                                onPressed: () => appState.setTabIndex(3), // Live stage tab
-                                icon: const Icon(Icons.live_tv_rounded, size: 18),
-                                label: const Text('Launch Live Stage LED View'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.primary,
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                                ),
-                              ),
-                              OutlinedButton.icon(
-                                onPressed: () => appState.setTabIndex(1),
-                                icon: const Icon(Icons.add_rounded, size: 18),
-                                label: const Text('Add New Program'),
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                                ),
-                              ),
-                              OutlinedButton.icon(
-                                onPressed: () => appState.setTabIndex(2),
-                                icon: const Icon(Icons.auto_awesome_rounded, size: 18),
-                                label: const Text('Regenerate Auto Schedule'),
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                                ),
-                              ),
-                            ],
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: () => appState.setTabIndex(3), // Live stage tab
+                          icon: const Icon(Icons.live_tv_rounded, size: 16),
+                          label: const Text('Live Stage Auditorium Console'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: () => appState.setTabIndex(1), // Programs Tab
+                          icon: const Icon(Icons.assignment_outlined, size: 16),
+                          label: const Text('Programs List'),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: () => appState.setTabIndex(2), // Schedule Tab
+                          icon: const Icon(Icons.auto_awesome_rounded, size: 16),
+                          label: const Text('Auto-Schedule Rules'),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: () => appState.setTabIndex(4), // Coordination tab
+                          icon: const Icon(Icons.how_to_reg_outlined, size: 16),
+                          label: const Text('Attendance & Marks'),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: () => appState.setTabIndex(5), // Teams tab
+                          icon: const Icon(Icons.emoji_events_outlined, size: 16),
+                          label: const Text('Team Tally'),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -223,158 +233,138 @@ class DashboardScreen extends StatelessWidget {
             ),
           ),
 
-          const SizedBox(height: 28),
+          const SizedBox(height: 24),
 
-          // Overview Statistics Cards Grid
+          // --- 2. OVERVIEW METRICS CARDS GRID (6 STAT CARDS) ---
           Text(
-            isSuperAdmin ? 'Real-Time System Overview' : 'Overview Statistics',
+            'Real-Time Live Overview',
             style: GoogleFonts.poppins(
               fontSize: 18,
               fontWeight: FontWeight.bold,
               color: isDark ? AppColors.textLight : AppColors.textDark,
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
 
           LayoutBuilder(
             builder: (context, constraints) {
-              int crossAxisCount = constraints.maxWidth > 1100
-                  ? 4
-                  : constraints.maxWidth > 700
-                      ? 2
-                      : 1;
+              int crossAxisCount = constraints.maxWidth > 1150
+                  ? 6
+                  : constraints.maxWidth > 800
+                      ? 3
+                      : constraints.maxWidth > 500
+                          ? 2
+                          : 1;
 
               return GridView.count(
                 crossAxisCount: crossAxisCount,
-                crossAxisSpacing: 18,
-                mainAxisSpacing: 18,
-                childAspectRatio: 2.2,
+                crossAxisSpacing: 14,
+                mainAxisSpacing: 14,
+                childAspectRatio: 1.8,
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
-                children: isSuperAdmin
-                    ? [
-                        _buildStatCard(
-                          context,
-                          title: 'Registered Madrasas',
-                          value: '$totalMadrasas',
-                          subtitle: 'Cloud Firestore Stream',
-                          icon: Icons.domain_rounded,
-                          color: AppColors.primary,
-                        ),
-                        _buildStatCard(
-                          context,
-                          title: 'Authorized Coordinators',
-                          value: '$totalMadrasas Registered',
-                          subtitle: '🟢 $onlineCoordinators Active Online',
-                          icon: Icons.admin_panel_settings_rounded,
-                          color: AppColors.secondary,
-                        ),
-                        _buildStatCard(
-                          context,
-                          title: 'Total Meelad Programs',
-                          value: '$totalProgs Events',
-                          subtitle: '$completedProgs Finished ($liveProgs Live)',
-                          icon: Icons.emoji_events_rounded,
-                          color: AppColors.accent,
-                        ),
-                        _buildStatCard(
-                          context,
-                          title: 'Cluster Database',
-                          value: '100% Synced',
-                          subtitle: 'Zero connection errors',
-                          icon: Icons.verified_user_rounded,
-                          color: AppColors.success,
-                        ),
-                      ]
-                    : [
-                        _buildStatCard(
-                          context,
-                          title: 'Total Programs',
-                          value: '$totalProgs',
-                          subtitle: 'Scheduled across 4 stages',
-                          icon: Icons.assignment_rounded,
-                          color: AppColors.primary,
-                        ),
-                        _buildStatCard(
-                          context,
-                          title: 'Live Now',
-                          value: '$liveProgs',
-                          subtitle: 'Active performance',
-                          icon: Icons.podcasts_rounded,
-                          color: AppColors.secondary,
-                        ),
-                        _buildStatCard(
-                          context,
-                          title: 'Completed',
-                          value: '$completedProgs',
-                          subtitle: '${totalProgs > 0 ? ((completedProgs / totalProgs) * 100).toStringAsFixed(0) : 0}% finish rate',
-                          icon: Icons.check_circle_rounded,
-                          color: AppColors.success,
-                        ),
-                        _buildStatCard(
-                          context,
-                          title: 'Pending Items',
-                          value: '$pendingProgs',
-                          subtitle: 'Awaiting call to stage',
-                          icon: Icons.hourglass_top_rounded,
-                          color: AppColors.warning,
-                        ),
-                      ],
+                children: [
+                  _buildStatCard(
+                    context,
+                    title: 'Total Programs',
+                    value: '$totalProgs',
+                    subtitle: 'Finished: $completedProgs • Live: $liveProgs',
+                    icon: Icons.assignment_rounded,
+                    color: AppColors.primary,
+                  ),
+                  _buildStatCard(
+                    context,
+                    title: 'Participants',
+                    value: '$totalParticipants',
+                    subtitle: 'Students Enrolled',
+                    icon: Icons.people_alt_rounded,
+                    color: AppColors.secondary,
+                  ),
+                  _buildStatCard(
+                    context,
+                    title: 'Madrasa Network',
+                    value: '$totalMadrasas',
+                    subtitle: 'Online: $onlineCoordinators Active',
+                    icon: Icons.domain_rounded,
+                    color: const Color(0xFF10B981),
+                  ),
+                  _buildStatCard(
+                    context,
+                    title: 'Leading House',
+                    value: leadingTeam != null ? leadingTeam.teamName : 'No Teams',
+                    subtitle: leadingTeam != null ? '${leadingTeam.overallPoint} Points Tally' : 'Tally Pending',
+                    icon: Icons.emoji_events_rounded,
+                    color: const Color(0xFFF59E0B),
+                  ),
+                  _buildStatCard(
+                    context,
+                    title: 'Evaluated Marks',
+                    value: '$markCount Marks',
+                    subtitle: 'Present: $presentCount Records',
+                    icon: Icons.fact_check_rounded,
+                    color: const Color(0xFF8B5CF6),
+                  ),
+                  _buildStatCard(
+                    context,
+                    title: 'Pending Programs',
+                    value: '$pendingProgs',
+                    subtitle: 'Awaiting call to stage',
+                    icon: Icons.hourglass_top_rounded,
+                    color: const Color(0xFFEC4899),
+                  ),
+                ],
               );
             },
           ),
 
-          const SizedBox(height: 28),
+          const SizedBox(height: 24),
 
-          // Main Analytics / Madrasas Table & Activity Feed Grid
+          // --- 3. UNIFIED RESPONSIVE WORKSPACE (LIVE LED CONSOLE + TIMELINE & LEADERBOARD) ---
           LayoutBuilder(
             builder: (context, constraints) {
-              final isWide = constraints.maxWidth > 900;
-              return isSuperAdmin
-                  ? (isWide
-                      ? Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              flex: 6,
-                              child: _buildSuperAdminMadrasasOverview(context, appState, isDark),
-                            ),
-                            const SizedBox(width: 24),
-                            Expanded(
-                              flex: 4,
-                              child: _buildSuperAdminAuditLogs(context, appState, isDark),
-                            ),
-                          ],
-                        )
-                      : Column(
-                          children: [
-                            _buildSuperAdminMadrasasOverview(context, appState, isDark),
-                            const SizedBox(height: 24),
-                            _buildSuperAdminAuditLogs(context, appState, isDark),
-                          ],
-                        ))
-                  : (isWide
-                      ? Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              flex: 6,
-                              child: _buildCoordinatorCharts(context, isDark),
-                            ),
-                            const SizedBox(width: 24),
-                            Expanded(
-                              flex: 4,
-                              child: _buildCoordinatorLiveFeed(context, appState, isDark),
-                            ),
-                          ],
-                        )
-                      : Column(
-                          children: [
-                            _buildCoordinatorCharts(context, isDark),
-                            const SizedBox(height: 24),
-                            _buildCoordinatorLiveFeed(context, appState, isDark),
-                          ],
-                        ));
+              final isWide = constraints.maxWidth > 920;
+
+              return isWide
+                  ? Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // LEFT COLUMN (60%): Live Auditorium Banner + Real Distribution Charts
+                        Expanded(
+                          flex: 6,
+                          child: Column(
+                            children: [
+                              _buildLiveAuditoriumConsoleCard(context, appState, isDark),
+                              const SizedBox(height: 20),
+                              _buildCategoryAndClassDistributionWidget(context, appState, isDark),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 20),
+
+                        // RIGHT COLUMN (40%): Real Team Standings Leaderboard + Timeline Queue
+                        Expanded(
+                          flex: 4,
+                          child: Column(
+                            children: [
+                              _buildTeamStandingsLeaderboardCard(context, appState, isDark),
+                              const SizedBox(height: 20),
+                              _buildTimelineQueuePreviewCard(context, scheduleSlots, isDark),
+                            ],
+                          ),
+                        ),
+                      ],
+                    )
+                  : Column(
+                      children: [
+                        _buildLiveAuditoriumConsoleCard(context, appState, isDark),
+                        const SizedBox(height: 20),
+                        _buildCategoryAndClassDistributionWidget(context, appState, isDark),
+                        const SizedBox(height: 20),
+                        _buildTeamStandingsLeaderboardCard(context, appState, isDark),
+                        const SizedBox(height: 20),
+                        _buildTimelineQueuePreviewCard(context, scheduleSlots, isDark),
+                      ],
+                    );
             },
           ),
         ],
@@ -382,12 +372,33 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSuperAdminMadrasasOverview(BuildContext context, AppState appState, bool isDark) {
-    final realMadrasas = appState.madrasas;
+  // --- LIVE AUDITORIUM LED CONSOLE WIDGET ---
+  Widget _buildLiveAuditoriumConsoleCard(BuildContext context, AppState appState, bool isDark) {
+    final liveProgram = appState.programs.firstWhere(
+      (p) => p.status == ProgramStatus.live,
+      orElse: () => Program(
+        id: 'NONE',
+        number: '#00',
+        studentName: 'No Performer Live',
+        studentPhoto: '',
+        studentClass: 'N/A',
+        category: 'Auditorium Idle',
+        item: 'Stage Idle',
+        durationMinutes: 12,
+        stage: 'Main Stage',
+        status: ProgramStatus.pending,
+        startTime: '08:30 AM',
+        teacher: 'Co-ordinator',
+      ),
+    );
+
+    final isLiveActive = liveProgram.id != 'NONE';
 
     return GlassCard(
-      borderRadius: 24,
-      padding: const EdgeInsets.all(24),
+      borderRadius: 22,
+      padding: const EdgeInsets.all(22),
+      customBgColor: isLiveActive ? AppColors.primary.withAlpha(22) : (isDark ? const Color(0xFF1E293B) : Colors.white),
+      customBorderColor: isLiveActive ? AppColors.primary.withAlpha(100) : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -397,128 +408,109 @@ class DashboardScreen extends StatelessWidget {
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(8),
+                    width: 10,
+                    height: 10,
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withAlpha(20),
-                      borderRadius: BorderRadius.circular(10),
+                      color: isLiveActive ? Colors.redAccent : Colors.amber,
+                      shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.school_rounded, color: AppColors.primary, size: 20),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 8),
                   Text(
-                    'Madrasa Network Directory (${realMadrasas.length})',
+                    isLiveActive ? '🔴 LIVE ON AUDITORIUM STAGE' : '⏳ AUDITORIUM STAGE IDLE',
                     style: GoogleFonts.poppins(
-                      fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: isDark ? AppColors.textLight : AppColors.textDark,
+                      fontSize: 12.5,
+                      color: isLiveActive ? Colors.redAccent : Colors.amber.shade800,
+                      letterSpacing: 1,
                     ),
                   ),
                 ],
               ),
-              TextButton.icon(
-                onPressed: () => appState.setTabIndex(1),
-                icon: const Icon(Icons.arrow_forward_rounded, size: 16, color: AppColors.primary),
-                label: Text('Manage Network', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.primary)),
+              ElevatedButton.icon(
+                onPressed: () => appState.setTabIndex(3), // Launch Live Stage LED View
+                icon: const Icon(Icons.launch_rounded, size: 14),
+                label: Text('Open Stage Console', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 11.5)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
               ),
             ],
           ),
           const SizedBox(height: 16),
-          if (realMadrasas.isEmpty)
-            Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Center(
-                child: Text(
-                  'No Madrasas registered in Cloud Firestore network.',
-                  style: GoogleFonts.poppins(fontSize: 12, color: isDark ? AppColors.subtextLight : AppColors.subtextDark),
+          if (isLiveActive) ...[
+            Row(
+              children: [
+                Container(
+                  width: 54,
+                  height: 54,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppColors.primary.withAlpha(30),
+                    border: Border.all(color: AppColors.primary, width: 2),
+                  ),
+                  child: Center(
+                    child: Text(
+                      liveProgram.studentName.isNotEmpty ? liveProgram.studentName[0].toUpperCase() : 'S',
+                      style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.primary),
+                    ),
+                  ),
                 ),
-              ),
-            )
-          else
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              child: DataTable(
-                columnSpacing: 22,
-                headingRowHeight: 44,
-                headingRowColor: WidgetStateProperty.all(isDark ? AppColors.surfaceDark : AppColors.surfaceLight),
-                columns: [
-                  DataColumn(label: Text('Reg No', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.primary))),
-                  DataColumn(label: Text('Madrasa Institute', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12, color: isDark ? AppColors.textLight : AppColors.textDark))),
-                  DataColumn(label: Text('Coordinator', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12, color: isDark ? AppColors.textLight : AppColors.textDark))),
-                  DataColumn(label: Text('Active Status', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12, color: isDark ? AppColors.textLight : AppColors.textDark))),
-                  DataColumn(label: Text('Actions', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12, color: isDark ? AppColors.textLight : AppColors.textDark))),
-                ],
-                rows: realMadrasas.map((m) {
-                  return DataRow(
-                    cells: [
-                      DataCell(
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary.withAlpha(20),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(m.madrasaRegNo, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 11, color: AppColors.primary)),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        liveProgram.studentName,
+                        style: GoogleFonts.poppins(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? AppColors.textLight : AppColors.textDark,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      DataCell(
-                        Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(m.madrasaName, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12, color: isDark ? AppColors.textLight : AppColors.textDark)),
-                            Text(m.address, style: GoogleFonts.poppins(fontSize: 10, color: isDark ? AppColors.subtextLight : AppColors.subtextDark)),
-                          ],
-                        ),
-                      ),
-                      DataCell(Text(m.coordinatorName, style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: isDark ? AppColors.textLight : AppColors.textDark))),
-                      DataCell(
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 8,
-                              height: 8,
-                              decoration: BoxDecoration(
-                                color: m.isOnline ? AppColors.success : Colors.grey,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              m.isOnline ? 'Online' : m.lastActive,
-                              style: GoogleFonts.poppins(
-                                fontSize: 11,
-                                fontWeight: m.isOnline ? FontWeight.bold : FontWeight.normal,
-                                color: m.isOnline ? AppColors.success : (isDark ? AppColors.subtextLight : AppColors.subtextDark),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      DataCell(
-                        IconButton(
-                          icon: const Icon(Icons.chat_bubble_rounded, size: 16, color: Color(0xFF25D366)),
-                          onPressed: () => WhatsAppHelper.openWhatsAppChat(context: context, phone: m.coordinatorPhone),
-                          tooltip: 'WhatsApp Chat',
-                        ),
+                      Text(
+                        'Item: ${liveProgram.item}  •  ${liveProgram.studentClass} (${liveProgram.category})',
+                        style: GoogleFonts.poppins(fontSize: 12, color: AppColors.secondary, fontWeight: FontWeight.w600),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
-                  );
-                }).toList(),
-              ),
+                  ),
+                ),
+              ],
             ),
+          ] else ...[
+            Text(
+              'No performance currently live. Launch the Live Stage Console to call programs to stage.',
+              style: GoogleFonts.poppins(fontSize: 12, color: isDark ? AppColors.subtextLight : AppColors.subtextDark),
+            ),
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildSuperAdminAuditLogs(BuildContext context, AppState appState, bool isDark) {
-    final realMadrasas = appState.madrasas;
+  // --- CATEGORY & CLASS REAL DISTRIBUTION WIDGET ---
+  Widget _buildCategoryAndClassDistributionWidget(BuildContext context, AppState appState, bool isDark) {
+    final progs = appState.programs;
+
+    // Real computations
+    final subJuniorCount = progs.where((p) => p.studentClass.toLowerCase().contains('sub')).length;
+    final juniorCount = progs.where((p) => p.studentClass.toLowerCase().contains('junior') && !p.studentClass.toLowerCase().contains('sub')).length;
+    final seniorCount = progs.where((p) => p.studentClass.toLowerCase().contains('senior') && !p.studentClass.toLowerCase().contains('super')).length;
+    final superSeniorCount = progs.where((p) => p.studentClass.toLowerCase().contains('super')).length;
+
+    final maxVal = (progs.isEmpty) ? 1 : progs.length;
 
     return GlassCard(
-      borderRadius: 24,
-      padding: const EdgeInsets.all(24),
+      borderRadius: 22,
+      padding: const EdgeInsets.all(22),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -526,24 +518,83 @@ class DashboardScreen extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Live Cluster Activity Audit',
+                'Class Distribution Breakdown',
                 style: GoogleFonts.poppins(
-                  fontSize: 16,
+                  fontSize: 15.5,
                   fontWeight: FontWeight.bold,
                   color: isDark ? AppColors.textLight : AppColors.textDark,
                 ),
               ),
-              const Icon(Icons.verified_user_rounded, color: AppColors.success, size: 20),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withAlpha(20),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '${progs.length} Total Programs',
+                  style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary),
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 16),
-          if (realMadrasas.isEmpty)
+          const SizedBox(height: 18),
+          _buildClassBarItem(context, 'Sub-Junior', subJuniorCount / maxVal, '$subJuniorCount Items', AppColors.primary),
+          _buildClassBarItem(context, 'Junior', juniorCount / maxVal, '$juniorCount Items', AppColors.secondary),
+          _buildClassBarItem(context, 'Senior', seniorCount / maxVal, '$seniorCount Items', const Color(0xFF10B981)),
+          _buildClassBarItem(context, 'Super Senior', superSeniorCount / maxVal, '$superSeniorCount Items', const Color(0xFF8B5CF6)),
+        ],
+      ),
+    );
+  }
+
+  // --- TEAM POINTS & MEDAL STANDINGS LEADERBOARD CARD ---
+  Widget _buildTeamStandingsLeaderboardCard(BuildContext context, AppState appState, bool isDark) {
+    final teams = List<TeamModel>.from(appState.teamRecords)
+      ..sort((a, b) => b.overallPoint.compareTo(a.overallPoint));
+
+    return GlassCard(
+      borderRadius: 22,
+      padding: const EdgeInsets.all(22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.emoji_events_rounded, color: Color(0xFFF59E0B), size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Team Medal Leaderboard',
+                    style: GoogleFonts.poppins(
+                      fontSize: 15.5,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? AppColors.textLight : AppColors.textDark,
+                    ),
+                  ),
+                ],
+              ),
+              InkWell(
+                onTap: () => appState.setTabIndex(5),
+                child: Text(
+                  'View All',
+                  style: GoogleFonts.poppins(fontSize: 11.5, fontWeight: FontWeight.bold, color: AppColors.primary),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          const Divider(height: 1),
+          const SizedBox(height: 14),
+          if (teams.isEmpty)
             Padding(
               padding: const EdgeInsets.all(20.0),
               child: Center(
                 child: Text(
-                  'No cluster activity logs available.',
-                  style: GoogleFonts.poppins(fontSize: 12, color: isDark ? AppColors.subtextLight : AppColors.subtextDark),
+                  'No teams configured in cluster.',
+                  style: GoogleFonts.poppins(fontSize: 11.5, color: isDark ? AppColors.subtextLight : AppColors.subtextDark),
                 ),
               ),
             )
@@ -551,23 +602,32 @@ class DashboardScreen extends StatelessWidget {
             ListView.separated(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: realMadrasas.length,
+              itemCount: teams.take(4).length,
               separatorBuilder: (context, index) => const Divider(height: 14, color: Colors.white10),
               itemBuilder: (context, idx) {
-                final m = realMadrasas[idx];
+                final team = teams[idx];
+                final rank = idx + 1;
+
+                Color rankColor = AppColors.primary;
+                if (rank == 1) rankColor = const Color(0xFFF59E0B);
+                if (rank == 2) rankColor = const Color(0xFF94A3B8);
+                if (rank == 3) rankColor = const Color(0xFFD97706);
+
                 return Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(6),
+                      width: 28,
+                      height: 28,
                       decoration: BoxDecoration(
-                        color: m.isOnline ? AppColors.success.withAlpha(25) : AppColors.primary.withAlpha(25),
+                        color: rankColor.withAlpha(30),
                         shape: BoxShape.circle,
+                        border: Border.all(color: rankColor, width: 1.5),
                       ),
-                      child: Icon(
-                        m.isOnline ? Icons.circle : Icons.domain_rounded,
-                        size: 12,
-                        color: m.isOnline ? AppColors.success : AppColors.primary,
+                      child: Center(
+                        child: Text(
+                          '#$rank',
+                          style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: rankColor),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -576,18 +636,27 @@ class DashboardScreen extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '${m.madrasaName} (${m.coordinatorName})',
-                            style: GoogleFonts.poppins(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: isDark ? AppColors.textLight : AppColors.textDark,
-                            ),
+                            team.teamName,
+                            style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: isDark ? AppColors.textLight : AppColors.textDark),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                           Text(
-                            m.isOnline ? '🟢 Coordinator active online now' : 'Registered at: ${m.createdAt}',
-                            style: GoogleFonts.poppins(fontSize: 10, color: isDark ? AppColors.subtextLight : AppColors.subtextDark),
+                            '🥇 ${team.overallMedals.firstCount}  🥈 ${team.overallMedals.secondCount}  🥉 ${team.overallMedals.thirdCount}',
+                            style: GoogleFonts.poppins(fontSize: 10.5, color: isDark ? AppColors.subtextLight : AppColors.subtextDark),
                           ),
                         ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: rankColor.withAlpha(20),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '${team.overallPoint} Pts',
+                        style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: rankColor),
                       ),
                     ),
                   ],
@@ -599,226 +668,95 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildCoordinatorCharts(BuildContext context, bool isDark) {
-    return Column(
-      children: [
-        GlassCard(
-          borderRadius: 24,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Program Distribution by Class',
-                    style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? AppColors.textLight : AppColors.textDark,
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withAlpha(20),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      '4 Classes',
-                      style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.primary),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              _buildClassBarItem(context, 'Sub-Junior', 0.65, '8 Programs', AppColors.primary),
-              _buildClassBarItem(context, 'Junior', 0.85, '12 Programs', AppColors.secondary),
-              _buildClassBarItem(context, 'Senior', 0.90, '14 Programs', AppColors.accent),
-              _buildClassBarItem(context, 'Super Senior', 0.50, '6 Programs', AppColors.info),
-            ],
-          ),
-        ),
-        const SizedBox(height: 20),
-        GlassCard(
-          borderRadius: 24,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+  // --- TIMELINE QUEUE PREVIEW CARD ---
+  Widget _buildTimelineQueuePreviewCard(BuildContext context, List<ScheduleSlot> scheduleSlots, bool isDark) {
+    return GlassCard(
+      borderRadius: 22,
+      padding: const EdgeInsets.all(22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Category Breakdown',
+                'Auto-Scheduled Timeline',
                 style: GoogleFonts.poppins(
-                  fontSize: 16,
+                  fontSize: 15.5,
                   fontWeight: FontWeight.bold,
                   color: isDark ? AppColors.textLight : AppColors.textDark,
                 ),
               ),
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: [
-                  _buildCategoryBadge('Qira\'at Recitation', '3', AppColors.primary),
-                  _buildCategoryBadge('Na\'at Praise', '2', AppColors.secondary),
-                  _buildCategoryBadge('Elocution / Speech', '2', AppColors.accent),
-                  _buildCategoryBadge('Group Choir', '1', AppColors.success),
-                  _buildCategoryBadge('Islamic Quiz', '1', AppColors.info),
-                  _buildCategoryBadge('Calligraphy', '1', AppColors.warning),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCoordinatorLiveFeed(BuildContext context, AppState appState, bool isDark) {
-    return Column(
-      children: [
-        GlassCard(
-          borderRadius: 24,
-          customBgColor: AppColors.primary.withAlpha(25),
-          customBorderColor: AppColors.primary.withAlpha(80),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 10,
-                        height: 10,
-                        decoration: const BoxDecoration(
-                          color: AppColors.error,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'STAGE A IS LIVE',
-                        style: GoogleFonts.poppins(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                          color: AppColors.error,
-                          letterSpacing: 1,
-                        ),
-                      ),
-                    ],
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.fullscreen_rounded, color: AppColors.primary),
-                    onPressed: () => appState.setTabIndex(3),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              if (appState.programs.any((p) => p.status == ProgramStatus.live)) ...[
-                Builder(builder: (context) {
-                  final liveItem = appState.programs.firstWhere((p) => p.status == ProgramStatus.live);
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        liveItem.item,
-                        style: GoogleFonts.poppins(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: isDark ? AppColors.textLight : AppColors.textDark,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Participant: ${liveItem.studentName} (${liveItem.studentClass})',
-                        style: GoogleFonts.poppins(
-                          fontSize: 13,
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      LinearProgressIndicator(
-                        value: 0.6,
-                        backgroundColor: isDark ? Colors.white10 : Colors.black12,
-                        color: AppColors.primary,
-                        borderRadius: BorderRadius.circular(10),
-                        minHeight: 8,
-                      ),
-                    ],
-                  );
-                }),
-              ] else
-                Text('No active live performance.', style: GoogleFonts.poppins(fontSize: 13, color: AppColors.subtextDark)),
-            ],
-          ),
-        ),
-        const SizedBox(height: 20),
-        GlassCard(
-          borderRadius: 24,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
               Text(
-                'Upcoming Timeline',
-                style: GoogleFonts.poppins(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? AppColors.textLight : AppColors.textDark,
+                '${scheduleSlots.length} Items',
+                style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          const Divider(height: 1),
+          const SizedBox(height: 14),
+          if (scheduleSlots.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Center(
+                child: Text(
+                  'No auto-generated schedule slots.',
+                  style: GoogleFonts.poppins(fontSize: 11.5, color: isDark ? AppColors.subtextLight : AppColors.subtextDark),
                 ),
               ),
-              const SizedBox(height: 16),
-              ListView.separated(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: appState.programs.take(3).length,
-                separatorBuilder: (context, index) => const Divider(height: 16, color: Colors.white10),
-                itemBuilder: (context, index) {
-                  final item = appState.programs.take(3).toList()[index];
-                  return Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          item.startTime,
-                          style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary),
-                        ),
+            )
+          else
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: scheduleSlots.take(4).length,
+              separatorBuilder: (context, index) => const Divider(height: 14, color: Colors.white10),
+              itemBuilder: (context, idx) {
+                final slot = scheduleSlots[idx];
+                return Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withAlpha(20),
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              item.item,
-                              style: GoogleFonts.poppins(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: isDark ? AppColors.textLight : AppColors.textDark,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            Text(
-                              '${item.studentName} • ${item.stage}',
-                              style: GoogleFonts.poppins(fontSize: 11, color: AppColors.subtextDark),
-                            ),
-                          ],
-                        ),
+                      child: Text(
+                        slot.startTime,
+                        style: GoogleFonts.poppins(fontSize: 10.5, fontWeight: FontWeight.bold, color: AppColors.primary),
                       ),
-                    ],
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-      ],
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            slot.title,
+                            style: GoogleFonts.poppins(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? AppColors.textLight : AppColors.textDark,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            slot.program != null ? '${slot.program!.studentName} • ${slot.program!.studentClass}' : 'Break / Pause',
+                            style: GoogleFonts.poppins(fontSize: 10.5, color: isDark ? AppColors.subtextLight : AppColors.subtextDark),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+        ],
+      ),
     );
   }
 
@@ -833,19 +771,19 @@ class DashboardScreen extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return GlassCard(
-      borderRadius: 20,
-      padding: const EdgeInsets.all(16),
+      borderRadius: 18,
+      padding: const EdgeInsets.all(14),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: color.withAlpha(25),
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(14),
             ),
-            child: Icon(icon, color: color, size: 24),
+            child: Icon(icon, color: color, size: 22),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -854,7 +792,7 @@ class DashboardScreen extends StatelessWidget {
                 Text(
                   title,
                   style: GoogleFonts.poppins(
-                    fontSize: 11,
+                    fontSize: 10.5,
                     color: isDark ? AppColors.subtextLight : AppColors.subtextDark,
                   ),
                   maxLines: 1,
@@ -863,7 +801,7 @@ class DashboardScreen extends StatelessWidget {
                 Text(
                   value,
                   style: GoogleFonts.poppins(
-                    fontSize: 17,
+                    fontSize: 16,
                     fontWeight: FontWeight.bold,
                     color: isDark ? AppColors.textLight : AppColors.textDark,
                   ),
@@ -873,7 +811,7 @@ class DashboardScreen extends StatelessWidget {
                 Text(
                   subtitle,
                   style: GoogleFonts.poppins(
-                    fontSize: 10,
+                    fontSize: 9.5,
                     fontWeight: FontWeight.w600,
                     color: color,
                   ),
@@ -892,7 +830,7 @@ class DashboardScreen extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 14.0),
+      padding: const EdgeInsets.only(bottom: 12.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -901,11 +839,11 @@ class DashboardScreen extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: isDark ? AppColors.textLight : AppColors.textDark),
+                style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.w600, color: isDark ? AppColors.textLight : AppColors.textDark),
               ),
               Text(
                 count,
-                style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: color),
+                style: GoogleFonts.poppins(fontSize: 11.5, fontWeight: FontWeight.bold, color: color),
               ),
             ],
           ),
@@ -913,42 +851,10 @@ class DashboardScreen extends StatelessWidget {
           ClipRRect(
             borderRadius: BorderRadius.circular(6),
             child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 8,
+              value: progress.clamp(0.05, 1.0),
+              minHeight: 7,
               backgroundColor: isDark ? Colors.white10 : Colors.black12,
               valueColor: AlwaysStoppedAnimation<Color>(color),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCategoryBadge(String label, String count, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-        color: color.withAlpha(20),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withAlpha(60)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label,
-            style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: color),
-          ),
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              count,
-              style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
             ),
           ),
         ],

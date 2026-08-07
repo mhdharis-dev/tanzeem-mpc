@@ -79,7 +79,7 @@ ${madrasa.email}
 ${madrasa.password}
 
 🌐 Login:
-https://tanzeem-mpc.netlify.app/
+https://tanzeem-mpc.vercel.app/
 
 ━━━━━━━━━━━━━━━━━━━━━━
 

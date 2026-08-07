@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'models.dart';
 
 class ParticipantModel {
   final String participantId; // e.g. "PATC-001"
@@ -61,6 +62,20 @@ class ParticipantModel {
       'madrasaId': madrasaId,
       'createdAt': createdAt,
     };
+  }
+
+  Participant toParticipant() {
+    return Participant(
+      id: participantId,
+      name: name,
+      photoUrl: 'https://i.pravatar.cc/150?u=$participantId',
+      studentClass: studentClass,
+      category: category,
+      item: 'Competition Item',
+      teacher: parentName.isNotEmpty ? parentName : 'Usthad',
+      madrasaName: madrasaId,
+      status: 'Active',
+    );
   }
 
   static String generateNextParticipantId(int currentLength) {
