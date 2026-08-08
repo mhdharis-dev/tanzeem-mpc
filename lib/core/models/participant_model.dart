@@ -75,6 +75,7 @@ class ParticipantModel {
       teacher: parentName.isNotEmpty ? parentName : 'Usthad',
       madrasaName: madrasaId,
       status: 'Active',
+      madrasaId: madrasaId,
     );
   }
 

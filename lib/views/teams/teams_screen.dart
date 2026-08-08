@@ -20,70 +20,6 @@ class _TeamsScreenState extends State<TeamsScreen> {
   String _selectedHouseFilter = 'All';
   String _selectedTeamFilter = 'All';
 
-  final List<TeamModel> _defaultDemoTeams = [
-    TeamModel(
-      teamId: 'team-001',
-      teamName: 'Al-Fath',
-      teamHouse: 'Red House',
-      houseColor: '0xFFEF4444',
-      teamCaptain: TeamMemberModel(participantId: 'P101', participantName: 'Muhammed Sinan', participantClass: '10', participantDiv: 'A'),
-      teamViceCaptain: TeamMemberModel(participantId: 'P102', participantName: 'Ahmad Raihan', participantClass: '9', participantDiv: 'B'),
-      totalMembers: 32,
-      overallPoint: 485,
-      members: [
-        TeamMemberModel(participantId: 'P101', participantName: 'Muhammed Sinan', participantClass: '10', participantDiv: 'A'),
-        TeamMemberModel(participantId: 'P102', participantName: 'Ahmad Raihan', participantClass: '9', participantDiv: 'B'),
-        TeamMemberModel(participantId: 'P103', participantName: 'Fadil Rahman', participantClass: '7', participantDiv: 'A'),
-      ],
-      overallMedals: TeamMedalsModel(firstCount: 8, secondCount: 5, thirdCount: 4),
-    ),
-    TeamModel(
-      teamId: 'team-002',
-      teamName: 'Badr',
-      teamHouse: 'Green House',
-      houseColor: '0xFF10B981',
-      teamCaptain: TeamMemberModel(participantId: 'P201', participantName: 'Bilal Hassan', participantClass: '10', participantDiv: 'A'),
-      teamViceCaptain: TeamMemberModel(participantId: 'P202', participantName: 'Zayd Muhammed', participantClass: '9', participantDiv: 'A'),
-      totalMembers: 30,
-      overallPoint: 440,
-      members: [
-        TeamMemberModel(participantId: 'P201', participantName: 'Bilal Hassan', participantClass: '10', participantDiv: 'A'),
-        TeamMemberModel(participantId: 'P202', participantName: 'Zayd Muhammed', participantClass: '9', participantDiv: 'A'),
-      ],
-      overallMedals: TeamMedalsModel(firstCount: 6, secondCount: 7, thirdCount: 3),
-    ),
-    TeamModel(
-      teamId: 'team-003',
-      teamName: 'Uhud',
-      teamHouse: 'Blue House',
-      houseColor: '0xFF3B82F6',
-      teamCaptain: TeamMemberModel(participantId: 'P301', participantName: 'Hamza Ibrahim', participantClass: '10', participantDiv: 'B'),
-      teamViceCaptain: TeamMemberModel(participantId: 'P302', participantName: 'Omar Mukhtar', participantClass: '9', participantDiv: 'B'),
-      totalMembers: 28,
-      overallPoint: 395,
-      members: [
-        TeamMemberModel(participantId: 'P301', participantName: 'Hamza Ibrahim', participantClass: '10', participantDiv: 'B'),
-        TeamMemberModel(participantId: 'P302', participantName: 'Omar Mukhtar', participantClass: '9', participantDiv: 'B'),
-      ],
-      overallMedals: TeamMedalsModel(firstCount: 5, secondCount: 4, thirdCount: 6),
-    ),
-    TeamModel(
-      teamId: 'team-004',
-      teamName: 'Yarmouk',
-      teamHouse: 'Gold House',
-      houseColor: '0xFFF59E0B',
-      teamCaptain: TeamMemberModel(participantId: 'P401', participantName: 'Khalid Waleed', participantClass: '10', participantDiv: 'A'),
-      teamViceCaptain: TeamMemberModel(participantId: 'P402', participantName: 'Tariq Ziyad', participantClass: '9', participantDiv: 'A'),
-      totalMembers: 29,
-      overallPoint: 360,
-      members: [
-        TeamMemberModel(participantId: 'P401', participantName: 'Khalid Waleed', participantClass: '10', participantDiv: 'A'),
-        TeamMemberModel(participantId: 'P402', participantName: 'Tariq Ziyad', participantClass: '9', participantDiv: 'A'),
-      ],
-      overallMedals: TeamMedalsModel(firstCount: 4, secondCount: 5, thirdCount: 5),
-    ),
-  ];
-
   void _confirmDeleteTeam(TeamModel team) {
     final appState = Provider.of<AppState>(context, listen: false);
     final isDark = appState.isDarkMode;
@@ -850,7 +786,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
     final appState = Provider.of<AppState>(context);
     final isDark = appState.isDarkMode;
 
-    final teamsList = appState.teamRecords.isNotEmpty ? appState.teamRecords : _defaultDemoTeams;
+    final teamsList = appState.teamRecords;
 
     final filteredTeams = teamsList.where((t) {
       final matchesSearch = _searchQuery.isEmpty ||
@@ -869,7 +805,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
     filteredTeams.sort((a, b) => b.overallPoint.compareTo(a.overallPoint));
 
     final totalChampionshipPoints = teamsList.fold<int>(0, (sum, t) => sum + t.overallPoint);
-    final topTeam = teamsList.reduce((a, b) => a.overallPoint > b.overallPoint ? a : b);
+    final topTeam = teamsList.isNotEmpty ? teamsList.reduce((a, b) => a.overallPoint > b.overallPoint ? a : b) : null;
 
     // Extract unique house names and team names for filter chips
     final availableHouses = ['All', ...teamsList.map((t) => t.teamHouse).toSet()];
@@ -918,7 +854,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
                             Text(
                               'Manage house teams, team captains, member rosters, and point tally',
                               style: GoogleFonts.poppins(
-                                fontSize: 13,
+                                fontSize: 12,
                                 color: isDark ? AppColors.subtextLight : AppColors.subtextDark,
                               ),
                             ),
@@ -928,16 +864,23 @@ class _TeamsScreenState extends State<TeamsScreen> {
                     ),
                   ],
                 ),
-                ElevatedButton.icon(
-                  onPressed: () => _openAddTeamSheet(),
-                  icon: const Icon(Icons.add_rounded, size: 18),
-                  label: Text('Add New Team / House', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
+                // Right Header Action Buttons
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: () => _openAddTeamSheet(),
+                      icon: const Icon(Icons.add_rounded, size: 18),
+                      label: Text('Create House Team', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        elevation: 4,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -963,10 +906,10 @@ class _TeamsScreenState extends State<TeamsScreen> {
                   child: _buildMetricCard(
                     context,
                     title: 'Leading House 👑',
-                    value: topTeam.teamName,
-                    subtitle: '${topTeam.overallPoint} Pts (1st Place)',
+                    value: topTeam?.teamName ?? 'N/A',
+                    subtitle: topTeam != null ? '${topTeam.overallPoint} Pts (1st Place)' : 'No Teams Yet',
                     icon: Icons.military_tech_rounded,
-                    color: Color(int.parse(topTeam.houseColor)),
+                    color: topTeam != null ? Color(int.parse(topTeam.houseColor)) : AppColors.primary,
                     isDark: isDark,
                   ),
                 ),
@@ -1139,7 +1082,45 @@ class _TeamsScreenState extends State<TeamsScreen> {
             const SizedBox(height: 24),
 
             // Teams Grid Cards
-            GridView.builder(
+            filteredTeams.isEmpty
+                ? GlassCard(
+                    padding: const EdgeInsets.all(48),
+                    borderRadius: 20,
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withAlpha(20),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.groups_outlined, size: 48, color: AppColors.primary),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'No Teams Created Yet',
+                            style: GoogleFonts.poppins(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? AppColors.textLight : AppColors.textDark,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Click "+ Create House Team" above to set up custom house teams for your madrasa.',
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              color: isDark ? AppColors.subtextLight : AppColors.subtextDark,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(

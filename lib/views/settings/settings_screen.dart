@@ -5,6 +5,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../core/providers/app_state.dart';
 import '../../core/theme/app_colors.dart';
+import '../widgets/glass_card.dart';
+import '../../core/utils/web_storage_helper.dart';
 import '../widgets/logout_dialog.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -26,8 +28,9 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
     final appState = Provider.of<AppState>(context, listen: false);
+    final isSuperAdmin = appState.userRole == 'Super Admin';
+    _tabController = TabController(length: isSuperAdmin ? 5 : 4, vsync: this);
     _festNameController = TextEditingController(text: appState.festivalName);
     _madrasaController = TextEditingController(text: appState.madrasaName);
   }
@@ -44,6 +47,12 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   Widget build(BuildContext context) {
     final appState = Provider.of<AppState>(context);
     final isDark = appState.isDarkMode;
+    final isSuperAdmin = appState.userRole == 'Super Admin';
+    final expectedLength = isSuperAdmin ? 5 : 4;
+    if (_tabController.length != expectedLength) {
+      _tabController.dispose();
+      _tabController = TabController(length: expectedLength, vsync: this);
+    }
 
     // Active Madrasa profile
     final activeMadrasa = appState.madrasas.firstWhere(
@@ -118,9 +127,9 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
       {
         'key': 'Ctrl + H',
         'action': 'Auto-Recalculate Schedule',
-        'desc': 'Triggers instant automatic schedule recalculation algorithm',
-        'category': 'Automation',
-        'icon': Icons.auto_awesome_rounded,
+        'desc': 'Triggers instant schedule timing recalculation & conflict check',
+        'category': 'Schedule',
+        'icon': Icons.restore_rounded,
       },
       {
         'key': 'Ctrl + T',
@@ -146,37 +155,37 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     ];
 
     final filteredShortcuts = shortcuts.where((s) {
+      if (_shortcutSearchQuery.isEmpty) return true;
       final q = _shortcutSearchQuery.toLowerCase();
-      return (s['key'] as String).toLowerCase().contains(q) ||
-          (s['action'] as String).toLowerCase().contains(q) ||
-          (s['desc'] as String).toLowerCase().contains(q) ||
-          (s['category'] as String).toLowerCase().contains(q);
+      final key = (s['key'] as String).toLowerCase();
+      final action = (s['action'] as String).toLowerCase();
+      final desc = (s['desc'] as String).toLowerCase();
+      final category = (s['category'] as String).toLowerCase();
+      return key.contains(q) || action.contains(q) || desc.contains(q) || category.contains(q);
     }).toList();
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: SingleChildScrollView(
+    return Container(
+      padding: const EdgeInsets.all(28),
+      color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
+      child: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.all(24.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // --- 1. PROFILE HERO HEADER CARD ---
+            // --- 1. HERO PROFILE CARD ---
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(28),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: isDark
-                      ? [const Color(0xFF0F172A), const Color(0xFF1E293B), const Color(0xFF0F172A)]
-                      : [const Color(0xFF0D9488), const Color(0xFF0F766E), const Color(0xFF115E59)],
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF0D9488), Color(0xFF0F766E), Color(0xFF115E59)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-                borderRadius: BorderRadius.circular(28),
+                borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF0D9488).withAlpha(70),
+                    color: const Color(0xFF0F766E).withAlpha(100),
                     blurRadius: 20,
                     offset: const Offset(0, 8),
                   ),
@@ -184,53 +193,29 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
               ),
               child: Row(
                 children: [
-                  // Profile Avatar Box with Glow
-                  Stack(
-                    children: [
-                      Container(
-                        width: 84,
-                        height: 84,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white.withAlpha(25),
-                          border: Border.all(color: Colors.white.withAlpha(90), width: 2),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withAlpha(50),
-                              blurRadius: 14,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Center(
-                          child: Text(
-                            activeMadrasa.coordinatorName.isNotEmpty
-                                ? activeMadrasa.coordinatorName.substring(0, 1).toUpperCase()
-                                : 'C',
-                            style: GoogleFonts.poppins(
-                              color: Colors.white,
-                              fontSize: 34,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                  // Profile Avatar
+                  Container(
+                    width: 76,
+                    height: 76,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withAlpha(40),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2.5),
+                    ),
+                    child: Center(
+                      child: Text(
+                        appState.userEmail.isNotEmpty ? appState.userEmail[0].toUpperCase() : 'M',
+                        style: GoogleFonts.poppins(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
                         ),
                       ),
-                      Positioned(
-                        right: 2,
-                        bottom: 2,
-                        child: Container(
-                          width: 20,
-                          height: 20,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF10B981),
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 2.5),
-                          ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
-                  const SizedBox(width: 24),
+                  const SizedBox(width: 22),
+
+                  // User Info
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -238,11 +223,11 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                         Row(
                           children: [
                             Text(
-                              activeMadrasa.coordinatorName.isNotEmpty ? activeMadrasa.coordinatorName : 'Coordinator Account',
+                              appState.userEmail,
                               style: GoogleFonts.poppins(
                                 color: Colors.white,
                                 fontWeight: FontWeight.bold,
-                                fontSize: 22,
+                                fontSize: 20,
                               ),
                             ),
                             const SizedBox(width: 12),
@@ -285,7 +270,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                     ),
                   ),
 
-                  // Sign Out Button in Hero Header
+                  // Sign Out Button
                   ElevatedButton.icon(
                     onPressed: () => showLogoutConfirmationDialog(context, appState),
                     icon: const Icon(Icons.logout_rounded, size: 16),
@@ -335,8 +320,8 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                 unselectedLabelColor: isDark ? AppColors.subtextLight : AppColors.subtextDark,
                 labelStyle: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13),
                 unselectedLabelStyle: GoogleFonts.poppins(fontWeight: FontWeight.w500, fontSize: 13),
-                tabs: const [
-                  Tab(
+                tabs: [
+                  const Tab(
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -346,7 +331,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                       ],
                     ),
                   ),
-                  Tab(
+                  const Tab(
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -356,17 +341,28 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                       ],
                     ),
                   ),
-                  Tab(
+                  const Tab(
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.palette_outlined, size: 16),
+                        Icon(Icons.cookie_rounded, size: 16),
                         SizedBox(width: 8),
-                        Text('Theme & Appearance'),
+                        Text('Web Memory & Cookies'),
                       ],
                     ),
                   ),
-                  Tab(
+                  if (isSuperAdmin)
+                    const Tab(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.palette_outlined, size: 16),
+                          SizedBox(width: 8),
+                          Text('Theme & Appearance'),
+                        ],
+                      ),
+                    ),
+                  const Tab(
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -394,10 +390,14 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                   // TAB 2: ORGANIZATION SETUP
                   _buildOrganizationSetupTab(context, appState, isDark),
 
-                  // TAB 3: THEME & APPEARANCE
-                  _buildThemeAppearanceTab(context, appState, isDark),
+                  // TAB 3: WEB MEMORY, CACHE & COOKIES
+                  _buildWebMemoryAndCookiesTab(context, appState, isDark),
 
-                  // TAB 4: HOTKEY SHORTCUTS
+                  // TAB 4: THEME & APPEARANCE (Super Admin Only)
+                  if (isSuperAdmin)
+                    _buildThemeAppearanceTab(context, appState, isDark),
+
+                  // TAB 5: HOTKEY SHORTCUTS
                   _buildHotkeyShortcutsTab(context, filteredShortcuts, isDark),
                 ],
               ),
@@ -896,6 +896,241 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
           ],
         ),
       ),
+    );
+  }
+
+  // --- TAB 3: WEB MEMORY, CACHE & COOKIES ---
+  Widget _buildWebMemoryAndCookiesTab(BuildContext context, AppState appState, bool isDark) {
+    return FutureBuilder<Map<String, dynamic>>(
+      future: WebStorageHelper.getStorageDiagnostics(),
+      builder: (context, snapshot) {
+        final diag = snapshot.data ?? {};
+        final ramEntries = diag['ramCacheEntries'] ?? 0;
+        final totalLocalKeys = diag['totalLocalStorageKeys'] ?? 0;
+        final activeCookies = diag['activeCookiesCount'] ?? 0;
+        final localDrafts = diag['localDraftsCount'] ?? 0;
+        final isWeb = diag['isWebPlatform'] ?? false;
+
+        return ListView(
+          physics: const BouncingScrollPhysics(),
+          children: [
+            Text(
+              'Web Memory, Cache & Cookies Management 🍪',
+              style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.primary),
+            ),
+            Text(
+              'Manage volatile RAM memory cache, offline local storage drafts, and browser session cookies.',
+              style: GoogleFonts.poppins(fontSize: 12, color: isDark ? AppColors.subtextLight : AppColors.subtextDark),
+            ),
+            const SizedBox(height: 16),
+
+            // Live Memory Diagnostics Grid
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                _buildMemoryStatBox(
+                  title: 'RAM Cache Memory',
+                  value: '$ramEntries Items',
+                  subtitle: 'Volatile In-Memory RAM',
+                  icon: Icons.memory_rounded,
+                  color: const Color(0xFF6366F1),
+                  isDark: isDark,
+                ),
+                _buildMemoryStatBox(
+                  title: 'Local Storage Drafts',
+                  value: '$localDrafts Local Drafts',
+                  subtitle: '$totalLocalKeys Stored Keys Total',
+                  icon: Icons.save_as_rounded,
+                  color: const Color(0xFF10B981),
+                  isDark: isDark,
+                ),
+                _buildMemoryStatBox(
+                  title: 'Active Web Cookies',
+                  value: '$activeCookies Cookies',
+                  subtitle: isWeb ? 'Browser Cookies (30-day)' : 'Platform Session Cookies',
+                  icon: Icons.cookie_rounded,
+                  color: const Color(0xFFF59E0B),
+                  isDark: isDark,
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 20),
+            Text(
+              'Memory & Cache Storage Actions',
+              style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 14, color: isDark ? AppColors.textLight : AppColors.textDark),
+            ),
+            const SizedBox(height: 12),
+
+            // Action Buttons Card
+            GlassCard(
+              borderRadius: 18,
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  _buildStorageActionTile(
+                    title: 'Clear Volatile RAM Cache Memory',
+                    subtitle: 'Wipes in-memory query caches and cached user states.',
+                    icon: Icons.cleaning_services_rounded,
+                    btnText: 'Clear RAM Cache',
+                    btnColor: const Color(0xFF6366F1),
+                    onTap: () async {
+                      await appState.clearAppCacheMemory();
+                      if (context.mounted) {
+                        setState(() {});
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('🧹 In-memory RAM cache cleared successfully!'), backgroundColor: Color(0xFF6366F1)),
+                        );
+                      }
+                    },
+                    isDark: isDark,
+                  ),
+                  const Divider(height: 20),
+                  _buildStorageActionTile(
+                    title: 'Clear Local Storage & Offline Drafts',
+                    subtitle: 'Deletes local schedule drafts and cached preferences.',
+                    icon: Icons.folder_delete_rounded,
+                    btnText: 'Clear Local Memory',
+                    btnColor: const Color(0xFF10B981),
+                    onTap: () async {
+                      await appState.clearAppLocalMemory();
+                      if (context.mounted) {
+                        setState(() {});
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('💾 Local storage drafts cleared successfully!'), backgroundColor: Color(0xFF10B981)),
+                        );
+                      }
+                    },
+                    isDark: isDark,
+                  ),
+                  const Divider(height: 20),
+                  _buildStorageActionTile(
+                    title: 'Clear Active Web Cookies',
+                    subtitle: 'Wipes session cookies (tanzeem_session, user_email, madrasa_id).',
+                    icon: Icons.cookie_outlined,
+                    btnText: 'Clear Cookies',
+                    btnColor: const Color(0xFFF59E0B),
+                    onTap: () async {
+                      await appState.clearAppCookies();
+                      if (context.mounted) {
+                        setState(() {});
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('🍪 Web session cookies cleared!'), backgroundColor: Color(0xFFF59E0B)),
+                        );
+                      }
+                    },
+                    isDark: isDark,
+                  ),
+                  const Divider(height: 20),
+                  _buildStorageActionTile(
+                    title: 'Purge All Web Storage, Cache & Cookies',
+                    subtitle: 'Full purge of RAM cache, local storage, and session cookies.',
+                    icon: Icons.delete_forever_rounded,
+                    btnText: 'Purge Everything',
+                    btnColor: AppColors.error,
+                    onTap: () async {
+                      await appState.purgeAllWebMemoryAndCookies();
+                      if (context.mounted) {
+                        setState(() {});
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('🔥 All web cache, local storage & cookies purged!'), backgroundColor: AppColors.error),
+                        );
+                      }
+                    },
+                    isDark: isDark,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildMemoryStatBox({
+    required String title,
+    required String value,
+    required String subtitle,
+    required IconData icon,
+    required Color color,
+    required bool isDark,
+  }) {
+    return SizedBox(
+      width: 240,
+      child: GlassCard(
+        borderRadius: 16,
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: color.withAlpha(25),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: color, size: 22),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(title, style: GoogleFonts.poppins(fontSize: 11, color: isDark ? AppColors.subtextLight : AppColors.subtextDark), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  Text(value, style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.bold, color: isDark ? AppColors.textLight : AppColors.textDark), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  Text(subtitle, style: GoogleFonts.poppins(fontSize: 9.5, color: color, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStorageActionTile({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required String btnText,
+    required Color btnColor,
+    required VoidCallback onTap,
+    required bool isDark,
+  }) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: btnColor.withAlpha(25),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(icon, color: btnColor, size: 22),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: isDark ? AppColors.textLight : AppColors.textDark)),
+              Text(subtitle, style: GoogleFonts.poppins(fontSize: 11, color: isDark ? AppColors.subtextLight : AppColors.subtextDark)),
+            ],
+          ),
+        ),
+        const SizedBox(width: 10),
+        ElevatedButton(
+          onPressed: onTap,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: btnColor,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          ),
+          child: Text(btnText, style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold)),
+        ),
+      ],
     );
   }
 }

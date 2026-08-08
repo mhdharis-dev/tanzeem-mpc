@@ -17,6 +17,17 @@ class CustomBreakItem {
 }
 
 class ScheduleGenerator {
+  static int _getCategoryRank(String categoryOrClass) {
+    final cat = categoryOrClass.trim().toLowerCase();
+    if (cat.contains('primary')) return 1;
+    if (cat.contains('sub-junior') || cat.contains('sub junior')) return 2;
+    if (cat.contains('junior')) return 3;
+    if (cat.contains('senior') && !cat.contains('super')) return 4;
+    if (cat.contains('super senior') || cat.contains('super')) return 5;
+    if (cat.contains('alumni')) return 6;
+    return 7;
+  }
+
   static List<ScheduleSlot> generateSchedule({
     required List<Program> programs,
     required TimeOfDay startTime,
@@ -32,16 +43,53 @@ class ScheduleGenerator {
   }) {
     List<ScheduleSlot> slots = [];
 
+    // Filter programs if autoShiftOnCancel is set
+    List<Program> activePrograms = autoShiftOnCancel
+        ? programs.where((p) => p.status != ProgramStatus.cancelled).toList()
+        : List.from(programs);
+
+    // Separate into Opening Ceremonial, Regular Programs, and Closing Ceremonial
+    List<Program> openingEvents = [];
+    List<Program> regularPrograms = [];
+    List<Program> closingEvents = [];
+
+    for (var p in activePrograms) {
+      final isOpening = p.category.toLowerCase().contains('opening') ||
+          p.studentClass.toLowerCase().contains('opening') ||
+          p.number == 'OPENING';
+      final isClosing = p.category.toLowerCase().contains('closing') ||
+          p.studentClass.toLowerCase().contains('closing') ||
+          p.number == 'CLOSING';
+
+      if (isOpening) {
+        openingEvents.add(p);
+      } else if (isClosing) {
+        closingEvents.add(p);
+      } else {
+        regularPrograms.add(p);
+      }
+    }
+
+    // Common Scheduling Order for regular programs: Primary -> Sub-Junior -> Junior -> Senior -> Super Senior -> Alumni
+    regularPrograms.sort((a, b) {
+      int rankA = _getCategoryRank(a.category.isNotEmpty ? a.category : a.studentClass);
+      int rankB = _getCategoryRank(b.category.isNotEmpty ? b.category : b.studentClass);
+      if (rankA != rankB) return rankA.compareTo(rankB);
+      return 0;
+    });
+
+    List<Program> sortedPrograms = [...openingEvents, ...regularPrograms, ...closingEvents];
+
     DateTime now = DateTime.now();
     DateTime current = DateTime(now.year, now.month, now.day, startTime.hour, startTime.minute);
 
     final timeFormat = DateFormat('hh:mm a');
     int slotIndex = 1;
 
-    for (var i = 0; i < programs.length; i++) {
-      var prog = programs[i];
+    for (var i = 0; i < sortedPrograms.length; i++) {
+      var prog = sortedPrograms[i];
 
-      // Check custom breaks
+      // Check user-added custom breaks
       for (var custom in customBreaks) {
         DateTime customDt = DateTime(now.year, now.month, now.day, custom.breakTime.hour, custom.breakTime.minute);
         if (current.isAfter(customDt.subtract(const Duration(minutes: 5))) &&
@@ -58,38 +106,9 @@ class ScheduleGenerator {
         }
       }
 
-      // Check if Dhuhr prayer time reached
-      DateTime dhuhrDt = DateTime(now.year, now.month, now.day, dhuhrTime.hour, dhuhrTime.minute);
-      if (current.isAfter(dhuhrDt.subtract(const Duration(minutes: 5))) &&
-          !slots.any((s) => s.type == SlotType.prayer && s.title.contains('Dhuhr'))) {
-        DateTime prayerEnd = current.add(Duration(minutes: dhuhrDurationMins));
-        slots.add(ScheduleSlot(
-          id: 'slot-prayer-dhuhr',
-          type: SlotType.prayer,
-          title: '🕌 Dhuhr Prayer & Lunch Break',
-          startTime: timeFormat.format(current),
-          endTime: timeFormat.format(prayerEnd),
-        ));
-        current = prayerEnd;
-      }
-
-      // Check if Asr prayer time reached
-      DateTime asrDt = DateTime(now.year, now.month, now.day, asrTime.hour, asrTime.minute);
-      if (current.isAfter(asrDt.subtract(const Duration(minutes: 5))) &&
-          !slots.any((s) => s.type == SlotType.prayer && s.title.contains('Asr'))) {
-        DateTime prayerEnd = current.add(const Duration(minutes: 30));
-        slots.add(ScheduleSlot(
-          id: 'slot-prayer-asr',
-          type: SlotType.prayer,
-          title: '🕌 Asr Prayer Break',
-          startTime: timeFormat.format(current),
-          endTime: timeFormat.format(prayerEnd),
-        ));
-        current = prayerEnd;
-      }
-
-      // Program slot
-      DateTime progEnd = current.add(Duration(minutes: prog.durationMinutes));
+      // Program slot duration with fallback handling
+      final duration = prog.durationMinutes > 0 ? prog.durationMinutes : fallbackDurationMins;
+      DateTime progEnd = current.add(Duration(minutes: duration));
       String startStr = timeFormat.format(current);
       String endStr = timeFormat.format(progEnd);
 
@@ -104,21 +123,9 @@ class ScheduleGenerator {
         program: prog,
       ));
 
-      current = progEnd;
+      // Advance current time with stage buffer offset
+      current = progEnd.add(Duration(seconds: stageBufferSecs));
       slotIndex++;
-
-      // Insert short tea break after every 3 programs if not right next to prayer
-      if (i > 0 && i % 3 == 0 && i != programs.length - 1) {
-        DateTime breakEnd = current.add(Duration(minutes: breakDurationMins));
-        slots.add(ScheduleSlot(
-          id: 'slot-break-$i',
-          type: SlotType.breakSlot,
-          title: '☕ Short Tea Break',
-          startTime: timeFormat.format(current),
-          endTime: timeFormat.format(breakEnd),
-        ));
-        current = breakEnd;
-      }
     }
 
     return slots;

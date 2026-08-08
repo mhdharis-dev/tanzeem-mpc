@@ -133,6 +133,7 @@ class TeamModel {
   int rank;
   int overallPoint;
   final TeamMedalsModel overallMedals;
+  final String madrasaId;
 
   TeamModel({
     required this.teamId,
@@ -146,6 +147,7 @@ class TeamModel {
     this.rank = 1,
     this.overallPoint = 0,
     TeamMedalsModel? overallMedals,
+    this.madrasaId = '',
   }) : overallMedals = overallMedals ?? TeamMedalsModel();
 
   factory TeamModel.fromMap(Map<String, dynamic> map) {
@@ -164,6 +166,7 @@ class TeamModel {
       rank: map['rank'] ?? 1,
       overallPoint: map['overallPoint'] ?? 0,
       overallMedals: map['overallMedals'] != null ? TeamMedalsModel.fromMap(map['overallMedals']) : TeamMedalsModel(),
+      madrasaId: map['madrasaId'] ?? '',
     );
   }
 
@@ -180,6 +183,7 @@ class TeamModel {
       'rank': rank,
       'overallPoint': overallPoint,
       'overallMedals': overallMedals.toMap(),
+      'madrasaId': madrasaId,
     };
   }
 

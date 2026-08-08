@@ -7,6 +7,7 @@ import '../../core/models/participant_model.dart';
 import '../../core/providers/app_state.dart';
 import '../../core/theme/app_colors.dart';
 import '../widgets/glass_card.dart';
+import '../../core/utils/responsive.dart';
 import 'add_class_mark_sheet.dart';
 
 class MarkCoordinationScreen extends StatefulWidget {
@@ -241,7 +242,7 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
       backgroundColor: Colors.transparent,
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.all(24.0),
+        padding: EdgeInsets.all(Responsive.getPadding(context)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -443,7 +444,7 @@ class _MarkCoordinationScreenState extends State<MarkCoordinationScreen> {
                         context,
                         label: 'Category Filter',
                         value: _selectedCategoryFilter,
-                        items: ['All Categories', 'Sub-Junior', 'Junior', 'Senior', 'Super Senior'],
+                        items: ['All Categories','Primary' , 'Sub-Junior', 'Junior', 'Senior', 'Super Senior', 'Alumni'],
                         onChanged: (val) => setState(() => _selectedCategoryFilter = val!),
                         icon: Icons.workspace_premium_rounded,
                         isDark: isDark,

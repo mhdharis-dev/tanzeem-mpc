@@ -35,7 +35,7 @@ class SideEventTabEntry {
           text: scheduledTime ?? '10:00 AM - 12:00 PM',
         ),
         selectedCategories = selectedCategories ??
-            {'All', 'Sub-Junior', 'Junior', 'Senior', 'Super Senior'};
+            {'All', 'Primary', 'Sub-Junior', 'Junior', 'Senior', 'Super Senior', 'Alumni'};
 
   void dispose() {
     nameController.dispose();
@@ -69,8 +69,8 @@ class _AddSideEventSheetState extends State<AddSideEventSheet> {
   int _activeTabIndex = 0;
   final List<SideEventTabEntry> _eventTabs = [];
 
-  final List<String> _categories = ['All', 'Sub-Junior', 'Junior', 'Senior', 'Super Senior'];
-  final List<String> _specificCategories = ['Sub-Junior', 'Junior', 'Senior', 'Super Senior'];
+  final List<String> _categories = ['All', 'Primary', 'Sub-Junior', 'Junior', 'Senior', 'Super Senior', 'Alumni'];
+  final List<String> _specificCategories = ['Primary', 'Sub-Junior', 'Junior', 'Senior', 'Super Senior', 'Alumni'];
 
   // Preset Side Event Name Suggestions
   final List<String> _presetEventNames = [

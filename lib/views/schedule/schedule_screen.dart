@@ -6,6 +6,7 @@ import '../../core/models/models.dart';
 import '../../core/providers/app_state.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/schedule_generator.dart';
+import '../../core/utils/responsive.dart';
 import '../widgets/glass_card.dart';
 import 'add_opening_event_sheet.dart';
 
@@ -35,17 +36,14 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   // --- 4. PARTICIPANT MINIMUM GAP ---
   int _participantMinGapMins = 20; // 5, 10, 15, 20, 25, 30, 45, 60
 
-  // --- 5. CLASS DISTRIBUTION ---
-  String _maxConsecutiveSameClass = '2'; // '1', '2', '3', 'Unlimited'
-
-  // --- 6. PROGRAM DISTRIBUTION ---
+  // --- 5. PROGRAM DISTRIBUTION ---
   bool _altSingle = true;
   bool _altGroup = true;
   bool _altOther = true;
   int _maxConsecutiveGroup = 2; // 1, 2, 3, 4
   int _maxConsecutiveSingle = 5; // 2, 3, 5, 10
 
-  // --- 7. OPENING & CLOSING REORDERABLE SEQUENCE ---
+  // --- 6. OPENING & CLOSING REORDERABLE SEQUENCE ---
   final List<String> _openingClosingSequence = [
     '1. Qur\'an Recitation',
     '2. Welcome Speech',
@@ -55,45 +53,33 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     '6. Vote of Thanks & Dua',
   ];
 
-  // --- 8. CANCELLATION BEHAVIOR ---
+  // --- 7. CANCELLATION BEHAVIOR ---
   String _cancellationBehavior = 'Move next program'; // 'Move next program', 'Leave empty', 'Ask me', 'Fill with announcement'
 
-  // --- MISSING RULE 1: PRAYER TIME MANAGEMENT ---
-  bool _enablePrayerPauses = true;
-  TimeOfDay _maghribPrayerTime = const TimeOfDay(hour: 19, minute: 15);
-  int _prayerPauseDurationMins = 15; // 10, 15, 20, 30, 45
-
-  // --- MISSING RULE 2: BREAK MANAGEMENT ---
-  bool _enableTeaBreak = true;
-  TimeOfDay _teaBreakTime = const TimeOfDay(hour: 11, minute: 0);
-  int _teaBreakDurationMins = 15;
-
-  bool _enableLunchBreak = true;
-  TimeOfDay _lunchBreakTime = const TimeOfDay(hour: 13, minute: 0);
-  int _lunchBreakDurationMins = 45;
-
-  // --- MISSING RULE 3: LOCKED PROGRAMS ---
-  bool _lockSelectedPrograms = true;
-
-  // --- MISSING RULE 4: PRIORITY WEIGHTING ---
-  final Set<String> _highPriorityTypes = {'Qur\'an', 'Opening', 'Chief Guest', 'VIP'};
-
-  // --- MISSING RULE 5: FINISH BEFORE DEADLINE ---
-  TimeOfDay _targetFinishTime = const TimeOfDay(hour: 22, minute: 30);
-
-  // --- MISSING RULE 6: SMART AI OPTIMIZATION ---
-  bool _enableSmartAIOptimization = true;
+  bool _isPublishing = false;
 
   final String _referenceOpeningProgram = 'Meelad Festival Inauguration & Opening Qira\'at';
 
   void _runAutoScheduleWithRules(AppState appState) {
     appState.defaultStartTime = _festivalStartTime;
+    final rulesMap = {
+      'festivalStartTime': '${_festivalStartTime.hour.toString().padLeft(2, '0')}:${_festivalStartTime.minute.toString().padLeft(2, '0')}',
+      'festivalEndTime': '${_festivalEndTime.hour.toString().padLeft(2, '0')}:${_festivalEndTime.minute.toString().padLeft(2, '0')}',
+      'durationMode': _durationMode,
+      'fallbackDurationMins': _fallbackDurationMins,
+      'stageBufferSecs': _stageBufferSecs,
+      'participantMinGapMins': _participantMinGapMins,
+      'cancellationBehavior': _cancellationBehavior,
+    };
+
     appState.generateAutoSchedule(
       fallbackDurationMins: _fallbackDurationMins,
       stageBufferSecs: _stageBufferSecs,
       participantGapMins: _participantMinGapMins,
       autoShiftOnCancel: _cancellationBehavior == 'Move next program',
     );
+
+    appState.saveScheduleDraftLocally(rulesOverride: rulesMap);
   }
 
   // Modal 1: Add Custom Break Slot
@@ -263,12 +249,16 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     final appState = Provider.of<AppState>(context);
     final isDark = appState.isDarkMode;
 
-    final totalPrograms = appState.programs.length;
-    final totalDurationMins = appState.programs.fold(0, (sum, p) => sum + p.durationMinutes);
+    final List<Program> realProgramsList = [
+      ...appState.ceremonialEvents.map((c) => c.toProgram()),
+      ...appState.realPrograms.map((p) => p.toProgram()),
+    ];
+    final totalPrograms = realProgramsList.length;
+    final totalDurationMins = realProgramsList.fold<int>(0, (sum, p) => sum + p.durationMinutes);
     final hours = totalDurationMins ~/ 60;
     final mins = totalDurationMins % 60;
 
-    final filteredPrograms = appState.programs.where((p) {
+    final filteredPrograms = realProgramsList.where((Program p) {
       final q = _searchProgramQuery.trim().toLowerCase();
       if (q.isEmpty) return true;
       return p.item.toLowerCase().contains(q) ||
@@ -277,20 +267,14 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
           p.studentClass.toLowerCase().contains(q);
     }).toList();
 
-    // Check if target deadline is exceeded
-    final finishTimeMinutes = (_festivalStartTime.hour * 60 + _festivalStartTime.minute) + totalDurationMins + (appState.scheduleSlots.length * (_stageBufferSecs ~/ 60));
-    final targetDeadlineMinutes = _targetFinishTime.hour * 60 + _targetFinishTime.minute;
-    final isDeadlineExceeded = finishTimeMinutes > targetDeadlineMinutes;
-
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: LayoutBuilder(
         builder: (context, constraints) {
           final isNarrow = constraints.maxWidth < 950;
-
           return SingleChildScrollView(
             physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.all(24.0),
+            padding: EdgeInsets.all(Responsive.getPadding(context)),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -347,10 +331,116 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                     Wrap(
                       spacing: 10,
                       runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
+                        // 🔒 Lock / Unlock Schedule Toggle Button
+                        ElevatedButton.icon(
+                          onPressed: () async {
+                            final rulesMap = {
+                              'festivalStartTime': '${_festivalStartTime.hour.toString().padLeft(2, '0')}:${_festivalStartTime.minute.toString().padLeft(2, '0')}',
+                              'festivalEndTime': '${_festivalEndTime.hour.toString().padLeft(2, '0')}:${_festivalEndTime.minute.toString().padLeft(2, '0')}',
+                              'durationMode': _durationMode,
+                              'fallbackDurationMins': _fallbackDurationMins,
+                              'stageBufferSecs': _stageBufferSecs,
+                              'participantMinGapMins': _participantMinGapMins,
+                              'cancellationBehavior': _cancellationBehavior,
+                            };
+
+                            await appState.toggleScheduleLock(rulesOverride: rulesMap);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    appState.isScheduleLocked
+                                        ? '🔒 Schedule is now locked and finalized.'
+                                        : '🔓 Schedule is now unlocked. You can make adjustments.',
+                                  ),
+                                  backgroundColor: appState.isScheduleLocked ? AppColors.error : AppColors.success,
+                                  duration: const Duration(seconds: 2),
+                                ),
+                              );
+                            }
+                          },
+                          icon: Icon(
+                            appState.isScheduleLocked ? Icons.lock_rounded : Icons.lock_open_rounded,
+                            size: 16,
+                          ),
+                          label: Text(
+                            appState.isScheduleLocked ? '🔒 Schedule Locked' : '🔓 Schedule Unlocked',
+                            style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12.5),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: appState.isScheduleLocked ? AppColors.error : const Color(0xFF10B981),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            elevation: 3,
+                          ),
+                        ),
+
+                        // ☁️ Save / Publish Schedule Button (Visible ONLY when schedule is LOCKED)
+                        if (appState.isScheduleLocked)
+                          ElevatedButton.icon(
+                            onPressed: _isPublishing
+                                ? null
+                                : () async {
+                                    final messenger = ScaffoldMessenger.of(context);
+                                    setState(() => _isPublishing = true);
+                                    try {
+                                      final rulesMap = {
+                                        'festivalStartTime': '${_festivalStartTime.hour.toString().padLeft(2, '0')}:${_festivalStartTime.minute.toString().padLeft(2, '0')}',
+                                        'festivalEndTime': '${_festivalEndTime.hour.toString().padLeft(2, '0')}:${_festivalEndTime.minute.toString().padLeft(2, '0')}',
+                                        'durationMode': _durationMode,
+                                        'fallbackDurationMins': _fallbackDurationMins,
+                                        'stageBufferSecs': _stageBufferSecs,
+                                        'participantMinGapMins': _participantMinGapMins,
+                                        'cancellationBehavior': _cancellationBehavior,
+                                      };
+
+                                      final ok = await appState.commitScheduleToFirestoreOnLock(rulesOverride: rulesMap);
+                                      if (mounted) {
+                                        messenger.showSnackBar(
+                                          SnackBar(
+                                            content: Text(ok ? '✨ Finalized schedule published successfully!' : '⚠️ Unable to publish schedule. Saved locally.'),
+                                            backgroundColor: ok ? AppColors.success : AppColors.warning,
+                                          ),
+                                        );
+                                      }
+                                    } catch (err) {
+                                      debugPrint('Error publishing schedule: $err');
+                                    } finally {
+                                      if (mounted) {
+                                        setState(() => _isPublishing = false);
+                                      }
+                                    }
+                                  },
+                            icon: _isPublishing
+                                ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                : const Icon(Icons.cloud_upload_rounded, size: 16),
+                            label: Text(_isPublishing ? 'Publishing...' : 'Publish Schedule ☁️', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12.5)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              elevation: 3,
+                            ),
+                          ),
+
                         // + Add Break Button
                         OutlinedButton.icon(
-                          onPressed: () => _openAddBreakModal(context, appState),
+                          onPressed: () {
+                            if (appState.isScheduleLocked) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('🔒 Schedule is LOCKED. Unlock the schedule to add breaks.'),
+                                  backgroundColor: AppColors.error,
+                                ),
+                              );
+                              return;
+                            }
+                            _openAddBreakModal(context, appState);
+                          },
                           icon: const Icon(Icons.free_breakfast_rounded, size: 16),
                           label: Text('+ Add Break', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12.5)),
                           style: OutlinedButton.styleFrom(
@@ -364,6 +454,15 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                         // + Add Special Program Button (Inauguration, Qira'at)
                         OutlinedButton.icon(
                           onPressed: () {
+                            if (appState.isScheduleLocked) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('🔒 Schedule is LOCKED. Unlock the schedule to add opening events.'),
+                                  backgroundColor: AppColors.error,
+                                ),
+                              );
+                              return;
+                            }
                             showDialog(
                               context: context,
                               builder: (ctx) => const Dialog(
@@ -385,6 +484,15 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                         // Reset Manual Changes Button
                         OutlinedButton.icon(
                           onPressed: () {
+                            if (appState.isScheduleLocked) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('🔒 Schedule is LOCKED. Unlock the schedule to reset order.'),
+                                  backgroundColor: AppColors.error,
+                                ),
+                              );
+                              return;
+                            }
                             appState.resetManualProgramOrder();
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
@@ -402,69 +510,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           ),
                         ),
-
-                        // ✨ Generate Smart Schedule Button
-                        ElevatedButton.icon(
-                          onPressed: () {
-                            _runAutoScheduleWithRules(appState);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('✨ Smart AI Schedule generated based on your selected rules!'),
-                                backgroundColor: AppColors.success,
-                              ),
-                            );
-                          },
-                          icon: const Icon(Icons.auto_awesome_rounded, size: 18),
-                          label: Text('✨ Generate Smart Schedule', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            elevation: 4,
-                          ),
-                        ),
                       ],
                     ),
                   ],
                 ),
 
                 const SizedBox(height: 16),
-
-                // DEADLINE EXCEEDED WARNING BANNER (Rule 5 Warning)
-                if (isDeadlineExceeded) ...[
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.redAccent.withAlpha(20),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: Colors.redAccent.withAlpha(90)),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 24),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '⚠️ Festival Finish Time Warning',
-                                style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.redAccent),
-                              ),
-                              Text(
-                                'The calculated timeline extends past your target finish deadline of ${_targetFinishTime.format(context)}. Consider adjusting setup buffers or program durations.',
-                                style: GoogleFonts.poppins(fontSize: 11.5, color: isDark ? AppColors.textLight : AppColors.textDark),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
 
                 // --- 2. REFERENCE STARTING PROGRAM & METRIC CARDS ROW ---
                 Wrap(
@@ -570,6 +621,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                         children: [
                           Row(
                             mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
                               Container(
                                 padding: const EdgeInsets.all(10),
@@ -580,8 +632,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                                 child: const Icon(Icons.tune_rounded, color: AppColors.primary, size: 22),
                               ),
                               const SizedBox(width: 14),
-                              ConstrainedBox(
-                                constraints: const BoxConstraints(maxWidth: 420),
+                              Flexible(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -590,7 +641,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                                       style: GoogleFonts.poppins(fontSize: 15.5, fontWeight: FontWeight.bold, color: isDark ? AppColors.textLight : AppColors.textDark),
                                     ),
                                     Text(
-                                      'Configure timing, prayer breaks, participant gaps, max consecutive limits & AI optimization.',
+                                      'Configure festival start time, setup buffers, participant minimum gaps, program type distribution & cancellation behavior.',
                                       style: GoogleFonts.poppins(fontSize: 11.5, color: isDark ? AppColors.subtextLight : AppColors.subtextDark),
                                     ),
                                   ],
@@ -623,28 +674,6 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                 ),
                               ),
-
-                              // ✨ Generate Smart Schedule Button
-                              ElevatedButton.icon(
-                                onPressed: () {
-                                  _runAutoScheduleWithRules(appState);
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('✨ Smart AI Schedule generated based on your selected rules!'),
-                                      backgroundColor: AppColors.success,
-                                    ),
-                                  );
-                                },
-                                icon: const Icon(Icons.auto_awesome_rounded, size: 18),
-                                label: Text('✨ Generate Smart Schedule', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12.5)),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.primary,
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                  elevation: 3,
-                                ),
-                              ),
                             ],
                           ),
                         ],
@@ -673,7 +702,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                                   children: [
                                     Expanded(
                                       child: InkWell(
-                                        onTap: () async {
+                                        onTap: appState.isScheduleLocked ? null : () async {
                                           TimeOfDay? picked = await showTimePicker(context: context, initialTime: _festivalStartTime);
                                           if (picked != null) setState(() => _festivalStartTime = picked);
                                         },
@@ -698,7 +727,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                                     const SizedBox(width: 6),
                                     Expanded(
                                       child: InkWell(
-                                        onTap: () async {
+                                        onTap: appState.isScheduleLocked ? null : () async {
                                           TimeOfDay? picked = await showTimePicker(context: context, initialTime: _festivalEndTime);
                                           if (picked != null) setState(() => _festivalEndTime = picked);
                                         },
@@ -729,7 +758,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                                     Switch(
                                       value: _enableEndTimeStop,
                                       activeTrackColor: AppColors.primary,
-                                      onChanged: (val) => setState(() => _enableEndTimeStop = val),
+                                      onChanged: appState.isScheduleLocked ? null : (val) => setState(() => _enableEndTimeStop = val),
                                     ),
                                   ],
                                 ),
@@ -857,40 +886,10 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                             ),
                           ),
 
-                          // 5. Class Distribution Card (Max Consecutive Limit)
+                          // 5. Program Type Distribution Card ⭐
                           _buildRuleConfigBox(
                             isDark: isDark,
-                            title: '5. Class Distribution',
-                            subtitle: 'Max consecutive programs from same class',
-                            icon: Icons.school_rounded,
-                            iconColor: const Color(0xFFEC4899),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Expanded(child: Text('Max Consecutive Same Class:', style: GoogleFonts.poppins(fontSize: 11))),
-                                DropdownButtonHideUnderline(
-                                  child: DropdownButton<String>(
-                                    value: _maxConsecutiveSameClass,
-                                    style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFFEC4899)),
-                                    items: const [
-                                      DropdownMenuItem(value: '1', child: Text('1 Item')),
-                                      DropdownMenuItem(value: '2', child: Text('2 Items')),
-                                      DropdownMenuItem(value: '3', child: Text('3 Items')),
-                                      DropdownMenuItem(value: 'Unlimited', child: Text('Unlimited')),
-                                    ],
-                                    onChanged: (val) {
-                                      if (val != null) setState(() => _maxConsecutiveSameClass = val);
-                                    },
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          // 6. Program Type Distribution Card ⭐
-                          _buildRuleConfigBox(
-                            isDark: isDark,
-                            title: '6. Program Type Distribution ⭐',
+                            title: '5. Program Type Distribution ⭐',
                             subtitle: 'Alternate Single/Group & max consecutive',
                             icon: Icons.groups_rounded,
                             iconColor: const Color(0xFF06B6D4),
@@ -898,9 +897,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                               children: [
                                 Row(
                                   children: [
-                                    _buildSmallCheck('Single', _altSingle, (v) => setState(() => _altSingle = v!)),
-                                    _buildSmallCheck('Group', _altGroup, (v) => setState(() => _altGroup = v!)),
-                                    _buildSmallCheck('Other', _altOther, (v) => setState(() => _altOther = v!)),
+                                    _buildSmallCheck('Single', _altSingle, (v) => setState(() => _altSingle = v!), isDisabled: appState.isScheduleLocked),
+                                    _buildSmallCheck('Group', _altGroup, (v) => setState(() => _altGroup = v!), isDisabled: appState.isScheduleLocked),
+                                    _buildSmallCheck('Other', _altOther, (v) => setState(() => _altOther = v!), isDisabled: appState.isScheduleLocked),
                                   ],
                                 ),
                                 const SizedBox(height: 6),
@@ -918,9 +917,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                                           DropdownMenuItem(value: 3, child: Text('3')),
                                           DropdownMenuItem(value: 4, child: Text('4')),
                                         ],
-                                        onChanged: (val) {
-                                          if (val != null) setState(() => _maxConsecutiveGroup = val);
-                                        },
+                                        onChanged: appState.isScheduleLocked
+                                            ? null
+                                            : (val) {
+                                                if (val != null) setState(() => _maxConsecutiveGroup = val);
+                                              },
                                       ),
                                     ),
                                     Text('Max Single:', style: GoogleFonts.poppins(fontSize: 10.5)),
@@ -934,9 +935,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                                           DropdownMenuItem(value: 5, child: Text('5')),
                                           DropdownMenuItem(value: 10, child: Text('10')),
                                         ],
-                                        onChanged: (val) {
-                                          if (val != null) setState(() => _maxConsecutiveSingle = val);
-                                        },
+                                        onChanged: appState.isScheduleLocked
+                                            ? null
+                                            : (val) {
+                                                if (val != null) setState(() => _maxConsecutiveSingle = val);
+                                              },
                                       ),
                                     ),
                                   ],
@@ -945,11 +948,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                             ),
                           ),
 
-                          // 7. Opening & Closing Sequence Drag & Drop Card ⭐
+                          // 6. Opening & Closing Sequence Drag & Drop Card ⭐
                           _buildRuleConfigBox(
                             isDark: isDark,
                             width: 580,
-                            title: '7. Opening & Closing Sequence (Drag & Reorder) ⭐',
+                            title: '6. Opening & Closing Sequence (Drag & Reorder) ⭐',
                             subtitle: 'Drag chips to set exact ceremonial sequence order',
                             icon: Icons.sort_rounded,
                             iconColor: const Color(0xFFF59E0B),
@@ -958,6 +961,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                               child: ReorderableListView(
                                 scrollDirection: Axis.horizontal,
                                 onReorderItem: (oldIndex, newIndex) {
+                                  if (appState.isScheduleLocked) return;
                                   setState(() {
                                     if (newIndex > oldIndex) newIndex -= 1;
                                     final item = _openingClosingSequence.removeAt(oldIndex);
@@ -991,10 +995,10 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                             ),
                           ),
 
-                          // 8. Cancellation Behavior Radio Card
+                          // 7. Cancellation Behavior Radio Card
                           _buildRuleConfigBox(
                             isDark: isDark,
-                            title: '8. Cancellation Behavior',
+                            title: '7. Cancellation Behavior',
                             subtitle: 'Radio options for cancelled slots',
                             icon: Icons.cancel_outlined,
                             iconColor: Colors.redAccent,
@@ -1018,265 +1022,45 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                               style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: isDark ? AppColors.textLight : AppColors.textDark),
                             ),
                           ),
-
-                          // MISSING RULE 1: PRAYER TIME MANAGEMENT CARD ⭐⭐⭐
-                          _buildRuleConfigBox(
-                            isDark: isDark,
-                            title: 'Missing Rule 1: Prayer Time ⭐⭐⭐',
-                            subtitle: 'Enable Maghrib & Prayer pauses during festival',
-                            icon: Icons.mosque_rounded,
-                            iconColor: const Color(0xFF10B981),
-                            child: Column(
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text('Enable Prayer Pauses:', style: GoogleFonts.poppins(fontSize: 11)),
-                                    Switch(
-                                      value: _enablePrayerPauses,
-                                      activeTrackColor: const Color(0xFF10B981),
-                                      onChanged: (val) => setState(() => _enablePrayerPauses = val),
-                                    ),
-                                  ],
-                                ),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: InkWell(
-                                        onTap: () async {
-                                          TimeOfDay? picked = await showTimePicker(context: context, initialTime: _maghribPrayerTime);
-                                          if (picked != null) setState(() => _maghribPrayerTime = picked);
-                                        },
-                                        borderRadius: BorderRadius.circular(8),
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFF10B981).withAlpha(20),
-                                            borderRadius: BorderRadius.circular(8),
-                                          ),
-                                          child: Text('Maghrib: ${_maghribPrayerTime.format(context)}', style: GoogleFonts.poppins(fontSize: 10.5, fontWeight: FontWeight.bold, color: const Color(0xFF10B981))),
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    DropdownButtonHideUnderline(
-                                      child: DropdownButton<int>(
-                                        value: _prayerPauseDurationMins,
-                                        style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: const Color(0xFF10B981)),
-                                        items: const [
-                                          DropdownMenuItem(value: 10, child: Text('10 min')),
-                                          DropdownMenuItem(value: 15, child: Text('15 min')),
-                                          DropdownMenuItem(value: 20, child: Text('20 min')),
-                                          DropdownMenuItem(value: 30, child: Text('30 min')),
-                                        ],
-                                        onChanged: (val) {
-                                          if (val != null) setState(() => _prayerPauseDurationMins = val);
-                                        },
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          // MISSING RULE 2: BREAK MANAGEMENT CARD ⭐⭐⭐
-                          _buildRuleConfigBox(
-                            isDark: isDark,
-                            title: 'Missing Rule 2: Break Management ⭐⭐⭐',
-                            subtitle: 'Tea & Lunch refreshment breaks',
-                            icon: Icons.free_breakfast_rounded,
-                            iconColor: const Color(0xFFF59E0B),
-                            child: Column(
-                              children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: InkWell(
-                                        onTap: () async {
-                                          TimeOfDay? picked = await showTimePicker(context: context, initialTime: _teaBreakTime);
-                                          if (picked != null) setState(() => _teaBreakTime = picked);
-                                        },
-                                        borderRadius: BorderRadius.circular(6),
-                                        child: Text('Tea: ${_teaBreakTime.format(context)}', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: const Color(0xFFF59E0B))),
-                                      ),
-                                    ),
-                                    DropdownButtonHideUnderline(
-                                      child: DropdownButton<int>(
-                                        value: _teaBreakDurationMins,
-                                        style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: const Color(0xFFF59E0B)),
-                                        items: const [
-                                          DropdownMenuItem(value: 10, child: Text('10m')),
-                                          DropdownMenuItem(value: 15, child: Text('15m')),
-                                          DropdownMenuItem(value: 20, child: Text('20m')),
-                                        ],
-                                        onChanged: (val) {
-                                          if (val != null) setState(() => _teaBreakDurationMins = val);
-                                        },
-                                      ),
-                                    ),
-                                    Switch(
-                                      value: _enableTeaBreak,
-                                      activeTrackColor: const Color(0xFFF59E0B),
-                                      onChanged: (val) => setState(() => _enableTeaBreak = val),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: InkWell(
-                                        onTap: () async {
-                                          TimeOfDay? picked = await showTimePicker(context: context, initialTime: _lunchBreakTime);
-                                          if (picked != null) setState(() => _lunchBreakTime = picked);
-                                        },
-                                        borderRadius: BorderRadius.circular(6),
-                                        child: Text('Lunch: ${_lunchBreakTime.format(context)}', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: const Color(0xFFF59E0B))),
-                                      ),
-                                    ),
-                                    DropdownButtonHideUnderline(
-                                      child: DropdownButton<int>(
-                                        value: _lunchBreakDurationMins,
-                                        style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: const Color(0xFFF59E0B)),
-                                        items: const [
-                                          DropdownMenuItem(value: 30, child: Text('30m')),
-                                          DropdownMenuItem(value: 45, child: Text('45m')),
-                                          DropdownMenuItem(value: 60, child: Text('60m')),
-                                        ],
-                                        onChanged: (val) {
-                                          if (val != null) setState(() => _lunchBreakDurationMins = val);
-                                        },
-                                      ),
-                                    ),
-                                    Switch(
-                                      value: _enableLunchBreak,
-                                      activeTrackColor: const Color(0xFFF59E0B),
-                                      onChanged: (val) => setState(() => _enableLunchBreak = val),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          // MISSING RULE 3: LOCKED PROGRAMS CARD ⭐⭐⭐
-                          _buildRuleConfigBox(
-                            isDark: isDark,
-                            title: 'Missing Rule 3: Locked Programs ⭐⭐⭐',
-                            subtitle: 'Auto-Schedule cannot move locked items',
-                            icon: Icons.lock_rounded,
-                            iconColor: const Color(0xFF8B5CF6),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Expanded(child: Text('Lock Selected Programs:', style: GoogleFonts.poppins(fontSize: 11.5))),
-                                Switch(
-                                  value: _lockSelectedPrograms,
-                                  activeTrackColor: const Color(0xFF8B5CF6),
-                                  onChanged: (val) => setState(() => _lockSelectedPrograms = val),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          // MISSING RULE 4: PRIORITY WEIGHTING CARD ⭐⭐⭐
-                          _buildRuleConfigBox(
-                            isDark: isDark,
-                            width: 580,
-                            title: 'Missing Rule 4: Priority Items ⭐⭐⭐',
-                            subtitle: 'Multi-select chips to schedule high priority early',
-                            icon: Icons.star_rounded,
-                            iconColor: Colors.orangeAccent,
-                            child: Wrap(
-                              spacing: 8,
-                              runSpacing: 6,
-                              children: ['Qur\'an', 'Opening', 'Chief Guest', 'VIP'].map((type) {
-                                final isSel = _highPriorityTypes.contains(type);
-                                return FilterChip(
-                                  selected: isSel,
-                                  label: Text(type, style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: isSel ? Colors.white : Colors.orangeAccent)),
-                                  selectedColor: Colors.orangeAccent,
-                                  backgroundColor: Colors.orangeAccent.withAlpha(20),
-                                  checkmarkColor: Colors.white,
-                                  onSelected: (val) {
-                                    setState(() {
-                                      if (val) {
-                                        _highPriorityTypes.add(type);
-                                      } else {
-                                        _highPriorityTypes.remove(type);
-                                      }
-                                    });
-                                  },
-                                );
-                              }).toList(),
-                            ),
-                          ),
-
-                          // MISSING RULE 5: FINISH BEFORE DEADLINE CARD ⭐⭐⭐
-                          _buildRuleConfigBox(
-                            isDark: isDark,
-                            title: 'Missing Rule 5: Finish Deadline ⭐⭐⭐',
-                            subtitle: 'Target finish time deadline with warning',
-                            icon: Icons.alarm_off_rounded,
-                            iconColor: Colors.redAccent,
-                            child: InkWell(
-                              onTap: () async {
-                                TimeOfDay? picked = await showTimePicker(context: context, initialTime: _targetFinishTime);
-                                if (picked != null) setState(() => _targetFinishTime = picked);
-                              },
-                              borderRadius: BorderRadius.circular(8),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                decoration: BoxDecoration(
-                                  color: Colors.redAccent.withAlpha(20),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: Colors.redAccent.withAlpha(80)),
-                                ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text('Target Finish: ${_targetFinishTime.format(context)}', style: GoogleFonts.poppins(fontSize: 11.5, fontWeight: FontWeight.bold, color: Colors.redAccent)),
-                                    const Icon(Icons.edit_outlined, size: 14, color: Colors.redAccent),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-
-                          // MISSING RULE 6: SMART AI OPTIMIZATION CARD ⭐⭐⭐
-                          _buildRuleConfigBox(
-                            isDark: isDark,
-                            title: 'Missing Rule 6: Smart AI Optimization ⭐⭐⭐',
-                            subtitle: 'One switch to balance categories, classes & group items',
-                            icon: Icons.auto_awesome_rounded,
-                            iconColor: const Color(0xFF6366F1),
-                            child: Column(
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text('Smart AI Optimize:', style: GoogleFonts.poppins(fontSize: 11.5, fontWeight: FontWeight.bold)),
-                                    Switch(
-                                      value: _enableSmartAIOptimization,
-                                      activeTrackColor: const Color(0xFF6366F1),
-                                      onChanged: (val) => setState(() => _enableSmartAIOptimization = val),
-                                    ),
-                                  ],
-                                ),
-                                if (_enableSmartAIOptimization)
-                                  Wrap(
-                                    spacing: 4,
-                                    children: const [
-                                      Chip(label: Text('Categories', style: TextStyle(fontSize: 9))),
-                                      Chip(label: Text('Classes', style: TextStyle(fontSize: 9))),
-                                      Chip(label: Text('Waiting Time', style: TextStyle(fontSize: 9))),
-                                    ],
-                                  ),
-                              ],
-                            ),
-                          ),
                         ],
+                      ),
+                      const SizedBox(height: 20),
+                      const Divider(height: 1),
+                      const SizedBox(height: 16),
+                      Center(
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            if (appState.isScheduleLocked) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('🔒 Schedule is LOCKED. Unlock the schedule to create/edit.'),
+                                  backgroundColor: AppColors.error,
+                                ),
+                              );
+                              return;
+                            }
+                            _runAutoScheduleWithRules(appState);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('✨ Schedule created successfully with your configured rules, breaks, and extra programs!'),
+                                backgroundColor: AppColors.success,
+                                duration: Duration(seconds: 3),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.auto_awesome_rounded, size: 20),
+                          label: Text(
+                            '✨ Apply Rules & Create Schedule Now',
+                            style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13.5),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            elevation: 4,
+                          ),
+                        ),
                       ),
                     ],
                   ],
@@ -1293,7 +1077,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                     // LEFT COLUMN: Manual Reordering & Timing Settings Panel
                     SizedBox(
                       width: isNarrow ? double.infinity : (constraints.maxWidth - 72) * 0.46,
-                      height: 720,
+                      height: isNarrow ? 520 : (constraints.maxHeight > 850 ? 760 : 660),
                       child: Column(
                         children: [
                           // Timing Parameters & Custom Breaks Card
@@ -1463,8 +1247,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                                       physics: const BouncingScrollPhysics(),
                                       itemCount: filteredPrograms.length,
                                       onReorderItem: (oldIndex, newIndex) {
-                                        if (_searchProgramQuery.isEmpty) {
-                                          appState.reorderProgram(oldIndex, newIndex);
+                                        if (_searchProgramQuery.isEmpty && !appState.isScheduleLocked) {
+                                          appState.reorderScheduleSlots(oldIndex, newIndex);
                                         }
                                       },
                                       itemBuilder: (context, idx) {
@@ -1559,7 +1343,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                     // RIGHT COLUMN: Auto-Calculated Live Timeline Stepper View Card
                     SizedBox(
                       width: isNarrow ? double.infinity : (constraints.maxWidth - 72) * 0.54,
-                      height: 720,
+                      height: isNarrow ? 540 : (constraints.maxHeight > 850 ? 760 : 660),
                       child: GlassCard(
                         padding: const EdgeInsets.all(20),
                         borderRadius: 20,
@@ -1574,31 +1358,62 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                                     Container(
                                       padding: const EdgeInsets.all(7),
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFF10B981).withAlpha(25),
+                                        color: appState.isScheduleLocked ? AppColors.error.withAlpha(25) : AppColors.success.withAlpha(25),
                                         borderRadius: BorderRadius.circular(10),
                                       ),
-                                      child: const Icon(Icons.timeline_rounded, color: Color(0xFF10B981), size: 18),
+                                      child: Icon(
+                                        appState.isScheduleLocked ? Icons.lock_rounded : Icons.timeline_rounded,
+                                        color: appState.isScheduleLocked ? AppColors.error : AppColors.success,
+                                        size: 20,
+                                      ),
                                     ),
                                     const SizedBox(width: 10),
                                     Text(
                                       'Live Auto-Calculated Timeline',
-                                      style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.bold, color: isDark ? AppColors.textLight : AppColors.textDark),
+                                      style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold, color: isDark ? AppColors.textLight : AppColors.textDark),
                                     ),
                                   ],
                                 ),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                   decoration: BoxDecoration(
-                                    color: AppColors.primary.withAlpha(25),
-                                    borderRadius: BorderRadius.circular(8),
+                                    color: appState.isScheduleLocked ? AppColors.error.withAlpha(20) : AppColors.primary.withAlpha(20),
+                                    borderRadius: BorderRadius.circular(20),
                                   ),
                                   child: Text(
-                                    '${appState.scheduleSlots.length} Timeline Slots',
-                                    style: GoogleFonts.poppins(fontSize: 10.5, fontWeight: FontWeight.bold, color: AppColors.primary),
+                                    appState.isScheduleLocked ? '🔒 Locked' : '${appState.scheduleSlots.length} Timeline Slots',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: appState.isScheduleLocked ? AppColors.error : AppColors.primary,
+                                    ),
                                   ),
                                 ),
                               ],
                             ),
+                            if (appState.isScheduleLocked) ...[
+                              const SizedBox(height: 10),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: AppColors.error.withAlpha(25),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: AppColors.error.withAlpha(80)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.lock_rounded, size: 16, color: AppColors.error),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        '🔒 Schedule is currently LOCKED. Edits, reordering & timing changes are disabled.',
+                                        style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.error),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                             const SizedBox(height: 14),
 
                             Expanded(
@@ -1863,8 +1678,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     required Widget child,
     double width = 280,
   }) {
-    return SizedBox(
-      width: width,
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        minWidth: 260,
+        maxWidth: width,
+      ),
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
@@ -1904,7 +1722,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     );
   }
 
-  Widget _buildSmallCheck(String label, bool value, ValueChanged<bool?> onChanged) {
+  Widget _buildSmallCheck(String label, bool value, ValueChanged<bool?> onChanged, {bool isDisabled = false}) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1912,7 +1730,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
           value: value,
           activeColor: AppColors.primary,
           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          onChanged: onChanged,
+          onChanged: isDisabled ? null : onChanged,
         ),
         Text(label, style: GoogleFonts.poppins(fontSize: 10.5, fontWeight: FontWeight.w600)),
         const SizedBox(width: 6),

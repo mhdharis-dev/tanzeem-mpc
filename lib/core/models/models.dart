@@ -6,6 +6,7 @@ export 'present_model.dart';
 export 'mark_model.dart';
 export 'ceremonial_event_model.dart';
 export 'team_model.dart';
+export 'schedule_model.dart';
 
 enum ProgramStatus { pending, live, completed, cancelled }
 
@@ -27,6 +28,7 @@ class Program {
   final String remarks;
   final String priority; // High, Normal, Low
   final String colorTag; // Hex color code or name
+  final String madrasaId;
 
   Program({
     required this.id,
@@ -44,6 +46,7 @@ class Program {
     this.remarks = '',
     this.priority = 'Normal',
     this.colorTag = '#0F766E',
+    this.madrasaId = '',
   });
 
   Program copyWith({
@@ -62,6 +65,7 @@ class Program {
     String? remarks,
     String? priority,
     String? colorTag,
+    String? madrasaId,
   }) {
     return Program(
       id: id ?? this.id,
@@ -79,6 +83,7 @@ class Program {
       remarks: remarks ?? this.remarks,
       priority: priority ?? this.priority,
       colorTag: colorTag ?? this.colorTag,
+      madrasaId: madrasaId ?? this.madrasaId,
     );
   }
 }
@@ -93,6 +98,7 @@ class Participant {
   final String teacher;
   final String madrasaName;
   final String status;
+  final String madrasaId;
 
   Participant({
     required this.id,
@@ -104,6 +110,7 @@ class Participant {
     required this.teacher,
     required this.madrasaName,
     required this.status,
+    this.madrasaId = '',
   });
 }
 

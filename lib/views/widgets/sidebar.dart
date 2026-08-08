@@ -7,13 +7,14 @@ import '../../core/theme/app_colors.dart';
 import 'logout_dialog.dart';
 
 class AppSidebar extends StatelessWidget {
-  const AppSidebar({super.key});
+  final bool isDrawer;
+  const AppSidebar({super.key, this.isDrawer = false});
 
   @override
   Widget build(BuildContext context) {
     final appState = Provider.of<AppState>(context);
     final isDark = appState.isDarkMode;
-    final isCollapsed = appState.isSidebarCollapsed;
+    final isCollapsed = isDrawer ? false : appState.isSidebarCollapsed;
 
     final List<Map<String, dynamic>> menuItems = appState.userRole == 'Super Admin'
         ? [
@@ -41,7 +42,7 @@ class AppSidebar extends StatelessWidget {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 250),
       curve: Curves.easeInOut,
-      width: isCollapsed ? 80 : 260,
+      width: isDrawer ? 280 : (isCollapsed ? 80 : 260),
       decoration: BoxDecoration(
         color: isDark ? AppColors.cardDark : Colors.white,
         border: Border(
@@ -55,38 +56,51 @@ class AppSidebar extends StatelessWidget {
         children: [
           // Header Logo & Branding
           Container(
-            height: 80,
+            height: 84,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             alignment: Alignment.centerLeft,
             child: Row(
               children: [
+                // Prominent High-Visibility Logo Card
                 Container(
-                  width: 44,
-                  height: 44,
+                  width: 55,
+                  height: 55,
+                  padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withAlpha(30),
-                    borderRadius: BorderRadius.circular(14),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: AppColors.primary.withAlpha(50),
+                      width: 1.5,
+                    ),
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.primary.withAlpha(80),
-                        blurRadius: 10,
+                        color: AppColors.primary.withAlpha(35),
+                        blurRadius: 14,
                         offset: const Offset(0, 4),
                       ),
                     ],
                   ),
-                  child: Image.asset(
-                    'assets/images/tanzeem_logo.png',
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => Center(
-                      child: Text(
-                        'T',
-                        style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 20, color: AppColors.primary),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.asset(
+                      'assets/images/tanzeem_logo.png',
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) => Center(
+                        child: Text(
+                          'T',
+                          style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 22,
+                            color: AppColors.primary,
+                          ),
+                        ),
                       ),
                     ),
                   ),
                 ),
                 if (!isCollapsed) ...[
-                  const SizedBox(width: 14),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -97,8 +111,9 @@ class AppSidebar extends StatelessWidget {
                             Text(
                               'Tanzeem',
                               style: GoogleFonts.poppins(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 19,
+                                letterSpacing: -0.3,
                                 color: isDark ? AppColors.textLight : AppColors.textDark,
                               ),
                             ),
@@ -106,15 +121,24 @@ class AppSidebar extends StatelessWidget {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
-                                color: AppColors.accent.withAlpha(40),
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFFF59E0B), Color(0xFFD97706)],
+                                ),
                                 borderRadius: BorderRadius.circular(6),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFFF59E0B).withAlpha(80),
+                                    blurRadius: 6,
+                                  ),
+                                ],
                               ),
                               child: Text(
                                 'PRO',
                                 style: GoogleFonts.poppins(
-                                  fontSize: 9,
+                                  fontSize: 9.5,
                                   fontWeight: FontWeight.bold,
-                                  color: AppColors.accent,
+                                  color: Colors.white,
+                                  letterSpacing: 0.5,
                                 ),
                               ),
                             ),
@@ -124,6 +148,7 @@ class AppSidebar extends StatelessWidget {
                           'Smart Meelad System',
                           style: GoogleFonts.poppins(
                             fontSize: 11,
+                            fontWeight: FontWeight.w500,
                             color: isDark ? AppColors.subtextLight : AppColors.subtextDark,
                           ),
                         ),
@@ -150,6 +175,9 @@ class AppSidebar extends StatelessWidget {
                   padding: const EdgeInsets.only(bottom: 6.0),
                   child: InkWell(
                     onTap: () {
+                      if (isDrawer && Scaffold.maybeOf(context)?.hasDrawer == true) {
+                        Navigator.of(context).pop();
+                      }
                       if (appState.activeTabIndex != idx) {
                         appState.setTabIndex(idx);
                       }

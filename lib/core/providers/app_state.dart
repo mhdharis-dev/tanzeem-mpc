@@ -8,10 +8,12 @@ import '../models/models.dart';
 import '../models/side_event_model.dart';
 import '../utils/dummy_data.dart';
 import '../utils/schedule_generator.dart';
+import '../utils/web_storage_helper.dart';
+import '../security/security_utils.dart';
 
 class AppState extends ChangeNotifier {
   bool _isDarkMode = false;
-  bool get isDarkMode => _isDarkMode;
+  bool get isDarkMode => _userRole == 'Super Admin' ? _isDarkMode : false;
 
   bool _isLoggedIn = false; // Starts on login page for role-based authentication
   bool get isLoggedIn => _isLoggedIn;
@@ -48,19 +50,31 @@ class AppState extends ChangeNotifier {
 
   // Data lists
   late List<Program> _programs;
-  List<Program> get programs => _programs;
+  List<Program> get programs {
+    if (_userRole == 'Super Admin') return _programs;
+    return _programs.where((p) => p.madrasaId.isEmpty || p.madrasaId == _madrasaId).toList();
+  }
 
   late List<Participant> _participants;
-  List<Participant> get participants => _participants;
+  List<Participant> get participants {
+    if (_userRole == 'Super Admin') return _participants;
+    return _participants.where((p) => p.madrasaId.isEmpty || p.madrasaId == _madrasaId).toList();
+  }
 
   late List<MadrasaModel> _madrasas;
   List<MadrasaModel> get madrasas => _madrasas;
 
   List<ParticipantModel> _realParticipants = [];
-  List<ParticipantModel> get realParticipants => _realParticipants;
+  List<ParticipantModel> get realParticipants {
+    if (_userRole == 'Super Admin') return _realParticipants;
+    return _realParticipants.where((p) => p.madrasaId.isEmpty || p.madrasaId == _madrasaId).toList();
+  }
 
   List<ProgramModel> _realPrograms = [];
-  List<ProgramModel> get realPrograms => _realPrograms;
+  List<ProgramModel> get realPrograms {
+    if (_userRole == 'Super Admin') return _realPrograms;
+    return _realPrograms.where((p) => p.madrasaId.isEmpty || p.madrasaId == _madrasaId).toList();
+  }
 
   List<PresentModel> _presentRecords = [];
   List<PresentModel> get presentRecords => _presentRecords;
@@ -69,7 +83,10 @@ class AppState extends ChangeNotifier {
   List<MarkModel> get markRecords => _markRecords;
 
   List<TeamModel> _teamRecords = [];
-  List<TeamModel> get teamRecords => _teamRecords;
+  List<TeamModel> get teamRecords {
+    if (_userRole == 'Super Admin') return _teamRecords;
+    return _teamRecords.where((t) => t.madrasaId.isEmpty || t.madrasaId == _madrasaId).toList();
+  }
 
   List<SideEventModel> _sideEventRecords = [];
   List<SideEventModel> get sideEventRecords => _sideEventRecords;
@@ -85,6 +102,193 @@ class AppState extends ChangeNotifier {
 
   final List<CustomBreakItem> _customBreaks = [];
   List<CustomBreakItem> get customBreaks => _customBreaks;
+
+  bool _isScheduleLocked = false;
+  bool get isScheduleLocked => _isScheduleLocked;
+
+  ScheduleModel buildScheduleModel({
+    required bool isLocked,
+    Map<String, dynamic>? rulesOverride,
+  }) {
+    final year = DateTime.now().year;
+    final scheduleId = 'schedule-$year';
+
+    // 1. Convert custom breaks
+    final breakModels = _customBreaks.map((b) {
+      return ScheduleBreakModel(
+        title: b.title,
+        startTime: '${b.breakTime.hour.toString().padLeft(2, '0')}:${b.breakTime.minute.toString().padLeft(2, '0')}',
+        duration: b.durationMinutes,
+      );
+    }).toList();
+
+    // 2. Convert ceremonial opening/closing events
+    final ceremonialModels = _ceremonialEvents.map((c) {
+      return ScheduleCeremonialEventModel(
+        name: c.programName,
+        eventPosition: c.position,
+        duration: c.durationMinutes,
+        person: c.personName,
+        personShortTitle: c.personDesignation,
+      );
+    }).toList();
+
+    // 3. Convert scheduled slots into ScheduledProgramItemModel list
+    final List<ScheduledProgramItemModel> scheduledItems = [];
+    int orderIdx = 1;
+
+    for (var slot in _scheduleSlots) {
+      if (slot.program != null) {
+        final prog = slot.program!;
+        final names = prog.studentName.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+
+        scheduledItems.add(ScheduledProgramItemModel(
+          prgName: prog.item,
+          prgId: prog.id,
+          prgOrder: orderIdx,
+          participantNames: names,
+          participantIds: [prog.id],
+          order: orderIdx,
+          prgType: prog.category.toLowerCase().contains('group') ? 'group' : 'single',
+          startTime: slot.startTime,
+          endTime: slot.endTime,
+          durations: prog.durationMinutes,
+          status: prog.status.name,
+        ));
+        orderIdx++;
+      }
+    }
+
+    // 4. Configured rules Map
+    final rulesMap = rulesOverride ?? {
+      'festivalStartTime': '${defaultStartTime.hour.toString().padLeft(2, '0')}:${defaultStartTime.minute.toString().padLeft(2, '0')}',
+      'defaultDurationMinutes': defaultDurationMinutes,
+      'customBreaksCount': _customBreaks.length,
+      'ceremonialEventsCount': _ceremonialEvents.length,
+    };
+
+    return ScheduleModel(
+      scheduleId: scheduleId,
+      madrasaId: _madrasaId,
+      updatedAt: DateTime.now().toIso8601String(),
+      isLocked: isLocked,
+      breaks: breakModels,
+      startAndEndPrograms: ceremonialModels,
+      schedule: scheduledItems,
+      rules: rulesMap,
+    );
+  }
+
+  // Save Schedule Draft to SharedPreferences
+  Future<void> saveScheduleDraftLocally({Map<String, dynamic>? rulesOverride}) async {
+    try {
+      final model = buildScheduleModel(isLocked: _isScheduleLocked, rulesOverride: rulesOverride);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('draft_schedule_$_madrasaId', jsonEncode(model.toMap()));
+    } catch (e) {
+      debugPrint('Error saving local schedule draft: $e');
+    }
+  }
+
+  // Commit Schedule to Cloud Firestore when locked and update related programs
+  Future<bool> commitScheduleToFirestoreOnLock({Map<String, dynamic>? rulesOverride}) async {
+    try {
+      _isScheduleLocked = true;
+      final model = buildScheduleModel(isLocked: true, rulesOverride: rulesOverride);
+      final mId = _madrasaId.isEmpty ? 'MDR-8801' : _madrasaId;
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('isScheduleLocked_$mId', true);
+      await prefs.setString('draft_schedule_$mId', jsonEncode(model.toMap()));
+
+      // 1. Commit schedule document to Cloud Firestore with timeout fallback
+      try {
+        final docRef = FirebaseFirestore.instance
+            .collection('madrasa')
+            .doc(mId)
+            .collection('schedule')
+            .doc(model.scheduleId);
+
+        await docRef.set(model.toMap()).timeout(const Duration(seconds: 5));
+
+        // 2. Batch update related competition programs and ceremonial events
+        final batch = FirebaseFirestore.instance.batch();
+        for (var item in model.schedule) {
+          if (_realPrograms.any((p) => p.programId == item.prgId)) {
+            final progRef = FirebaseFirestore.instance
+                .collection('madrasa')
+                .doc(mId)
+                .collection('programs')
+                .doc(item.prgId);
+
+            batch.set(progRef, {
+              'order': item.order,
+              'startTime': item.startTime,
+              'endTime': item.endTime,
+              'status': item.status,
+            }, SetOptions(merge: true));
+          } else if (_ceremonialEvents.any((c) => c.eventId == item.prgId)) {
+            final cerRef = FirebaseFirestore.instance
+                .collection('madrasa')
+                .doc(mId)
+                .collection('ceremonial_events')
+                .doc(item.prgId);
+
+            batch.set(cerRef, {
+              'order': item.order,
+              'startTime': item.startTime,
+              'endTime': item.endTime,
+            }, SetOptions(merge: true));
+          }
+        }
+        await batch.commit().timeout(const Duration(seconds: 5));
+      } catch (fsErr) {
+        debugPrint('Firestore write timed out or offline, schedule saved locally: $fsErr');
+      }
+
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error committing locked schedule: $e');
+      return false;
+    }
+  }
+
+  // Unlock schedule state
+  Future<void> unlockSchedule() async {
+    _isScheduleLocked = false;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('isScheduleLocked_$_madrasaId', false);
+
+      final docRef = FirebaseFirestore.instance
+          .collection('madrasa')
+          .doc(_madrasaId)
+          .collection('schedule')
+          .doc('schedule-${DateTime.now().year}');
+
+      await docRef.update({'isLocked': false});
+    } catch (e) {
+      debugPrint('Error unlocking schedule: $e');
+    }
+    notifyListeners();
+  }
+
+  Future<void> toggleScheduleLock({Map<String, dynamic>? rulesOverride}) async {
+    if (_isScheduleLocked) {
+      await unlockSchedule();
+    } else {
+      _isScheduleLocked = true;
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('isScheduleLocked_$_madrasaId', true);
+        await saveScheduleDraftLocally(rulesOverride: rulesOverride);
+      } catch (e) {
+        debugPrint('Error locking schedule: $e');
+      }
+      notifyListeners();
+    }
+  }
 
   // Live stage countdown state
   int _liveStageProgramIndex = 0;
@@ -133,6 +337,7 @@ class AppState extends ChangeNotifier {
           .snapshots()
           .listen((snapshot) {
         _ceremonialEvents = snapshot.docs.map((doc) => CeremonialEventModel.fromSnapshot(doc)).toList();
+        generateAutoSchedule();
         notifyListeners();
       }, onError: (e) {
         debugPrint('Firestore _fetchCeremonialEventsFromFirestore error: $e');
@@ -192,15 +397,32 @@ class AppState extends ChangeNotifier {
 
   void _fetchParticipantsFromFirestore() {
     try {
-      FirebaseFirestore.instance.collectionGroup('participants').snapshots().listen((snapshot) {
-        _realParticipants = snapshot.docs.map((doc) => ParticipantModel.fromSnapshot(doc)).toList();
-        if (_realParticipants.isNotEmpty) {
-          _participants = _realParticipants.map((p) => p.toParticipant()).toList();
-        }
-        notifyListeners();
-      }, onError: (e) {
-        debugPrint('Firestore _fetchParticipantsFromFirestore group stream error: $e');
-      });
+      if (_userRole == 'Super Admin' || _madrasaId.isEmpty) {
+        FirebaseFirestore.instance.collectionGroup('participants').snapshots().listen((snapshot) {
+          _realParticipants = snapshot.docs.map((doc) => ParticipantModel.fromSnapshot(doc)).toList();
+          if (_realParticipants.isNotEmpty) {
+            _participants = _realParticipants.map((p) => p.toParticipant()).toList();
+          }
+          notifyListeners();
+        }, onError: (e) {
+          debugPrint('Firestore _fetchParticipantsFromFirestore group stream error: $e');
+        });
+      } else {
+        FirebaseFirestore.instance
+            .collection('madrasa')
+            .doc(_madrasaId)
+            .collection('participants')
+            .snapshots()
+            .listen((snapshot) {
+          _realParticipants = snapshot.docs.map((doc) => ParticipantModel.fromSnapshot(doc)).toList();
+          if (_realParticipants.isNotEmpty) {
+            _participants = _realParticipants.map((p) => p.toParticipant()).toList();
+          }
+          notifyListeners();
+        }, onError: (e) {
+          debugPrint('Firestore _fetchParticipantsFromFirestore stream error: $e');
+        });
+      }
     } catch (e) {
       debugPrint('Firestore group stream init error: $e');
     }
@@ -208,16 +430,34 @@ class AppState extends ChangeNotifier {
 
   void _fetchProgramsFromFirestore() {
     try {
-      FirebaseFirestore.instance.collectionGroup('programs').snapshots().listen((snapshot) {
-        _realPrograms = snapshot.docs.map((doc) => ProgramModel.fromSnapshot(doc)).toList();
-        if (_realPrograms.isNotEmpty) {
-          _programs = _realPrograms.map((p) => p.toProgram()).toList();
-          generateAutoSchedule();
-        }
-        notifyListeners();
-      }, onError: (e) {
-        debugPrint('Firestore _fetchProgramsFromFirestore group stream error: $e');
-      });
+      if (_userRole == 'Super Admin' || _madrasaId.isEmpty) {
+        FirebaseFirestore.instance.collectionGroup('programs').snapshots().listen((snapshot) {
+          _realPrograms = snapshot.docs.map((doc) => ProgramModel.fromSnapshot(doc)).toList();
+          if (_realPrograms.isNotEmpty) {
+            _programs = _realPrograms.map((p) => p.toProgram()).toList();
+            generateAutoSchedule();
+          }
+          notifyListeners();
+        }, onError: (e) {
+          debugPrint('Firestore _fetchProgramsFromFirestore group stream error: $e');
+        });
+      } else {
+        FirebaseFirestore.instance
+            .collection('madrasa')
+            .doc(_madrasaId)
+            .collection('programs')
+            .snapshots()
+            .listen((snapshot) {
+          _realPrograms = snapshot.docs.map((doc) => ProgramModel.fromSnapshot(doc)).toList();
+          if (_realPrograms.isNotEmpty) {
+            _programs = _realPrograms.map((p) => p.toProgram()).toList();
+            generateAutoSchedule();
+          }
+          notifyListeners();
+        }, onError: (e) {
+          debugPrint('Firestore _fetchProgramsFromFirestore stream error: $e');
+        });
+      }
     } catch (e) {
       debugPrint('Firestore group stream init error: $e');
     }
@@ -513,6 +753,7 @@ class AppState extends ChangeNotifier {
           thirdCount: thirdCnt,
           thirdMedals: thirdList,
         ),
+        madrasaId: team.madrasaId.isNotEmpty ? team.madrasaId : _madrasaId,
       );
 
       final docRef = FirebaseFirestore.instance
@@ -855,140 +1096,19 @@ class AppState extends ChangeNotifier {
   }
 
   Future<bool> startProgramLiveInFirestore(String targetProgramId, String madrasaId) async {
-    try {
-      final mId = madrasaId.isEmpty ? _madrasaId : madrasaId;
-      final now = DateTime.now();
-      final timeStr = DateFormat('HH:mm:ss').format(now);
-      final batch = FirebaseFirestore.instance.batch();
-
-      // Stop any other currently live program
-      for (final prog in _realPrograms) {
-        if (prog.status.toLowerCase() == 'live' && prog.programId != targetProgramId) {
-          final ref = FirebaseFirestore.instance
-              .collection('madrasa')
-              .doc(mId)
-              .collection('programs')
-              .doc(prog.programId);
-
-          batch.update(ref, {
-            'status': 'completed',
-            'endTime': timeStr,
-          });
-        }
-      }
-
-      final targetRef = FirebaseFirestore.instance
-          .collection('madrasa')
-          .doc(mId)
-          .collection('programs')
-          .doc(targetProgramId);
-
-      batch.update(targetRef, {
-        'status': 'live',
-        'startTime': timeStr,
-      });
-
-      await batch.commit();
-      notifyListeners();
-      return true;
-    } catch (e) {
-      debugPrint('Error starting live program: $e');
-      return false;
-    }
+    return updateProgramStatusInFirestore(targetProgramId, madrasaId, ProgramStatus.live);
   }
 
   Future<bool> stopProgramLiveInFirestore(String targetProgramId, String madrasaId) async {
-    try {
-      final mId = madrasaId.isEmpty ? _madrasaId : madrasaId;
-      final now = DateTime.now();
-      final endTimeStr = DateFormat('HH:mm:ss').format(now);
-
-      final progIdx = _realPrograms.indexWhere((p) => p.programId == targetProgramId);
-      String calculatedDuration = '50 sec';
-
-      if (progIdx >= 0) {
-        final prog = _realPrograms[progIdx];
-        if (prog.startTime.isNotEmpty && prog.startTime != 'TBD') {
-          try {
-            DateTime? parsedStart;
-            try {
-              final t = DateFormat('HH:mm:ss').parse(prog.startTime);
-              parsedStart = DateTime(now.year, now.month, now.day, t.hour, t.minute, t.second);
-            } catch (_) {
-              final t = DateFormat('hh:mm a').parse(prog.startTime);
-              parsedStart = DateTime(now.year, now.month, now.day, t.hour, t.minute);
-            }
-
-            final diffSeconds = now.difference(parsedStart).inSeconds;
-            if (diffSeconds > 0) {
-              calculatedDuration = ProgramModel.formatSecondsToDuration(diffSeconds);
-            }
-          } catch (e) {
-            debugPrint('Error calculating exact duration: $e');
-          }
-        }
-      }
-
-      final targetRef = FirebaseFirestore.instance
-          .collection('madrasa')
-          .doc(mId)
-          .collection('programs')
-          .doc(targetProgramId);
-
-      await targetRef.update({
-        'status': 'completed',
-        'endTime': endTimeStr,
-        'duration': calculatedDuration,
-      });
-
-      notifyListeners();
-      return true;
-    } catch (e) {
-      debugPrint('Error stopping live program: $e');
-      return false;
-    }
+    return updateProgramStatusInFirestore(targetProgramId, madrasaId, ProgramStatus.completed);
   }
 
   Future<bool> cancelProgramInFirestore(String targetProgramId, String madrasaId) async {
-    try {
-      final mId = madrasaId.isEmpty ? _madrasaId : madrasaId;
-      final targetRef = FirebaseFirestore.instance
-          .collection('madrasa')
-          .doc(mId)
-          .collection('programs')
-          .doc(targetProgramId);
-
-      await targetRef.update({
-        'status': 'cancelled',
-      });
-
-      notifyListeners();
-      return true;
-    } catch (e) {
-      debugPrint('Error cancelling program: $e');
-      return false;
-    }
+    return updateProgramStatusInFirestore(targetProgramId, madrasaId, ProgramStatus.cancelled);
   }
 
   Future<bool> uncancelProgramInFirestore(String targetProgramId, String madrasaId) async {
-    try {
-      final mId = madrasaId.isEmpty ? _madrasaId : madrasaId;
-      final targetRef = FirebaseFirestore.instance
-          .collection('madrasa')
-          .doc(mId)
-          .collection('programs')
-          .doc(targetProgramId);
-
-      await targetRef.update({
-        'status': 'pending',
-      });
-
-      notifyListeners();
-      return true;
-    } catch (e) {
-      debugPrint('Error uncancelling program: $e');
-      return false;
-    }
+    return updateProgramStatusInFirestore(targetProgramId, madrasaId, ProgramStatus.pending);
   }
 
   Future<void> recalculateProgramOrdersInFirestore() async {
@@ -1017,14 +1137,107 @@ class AppState extends ChangeNotifier {
     return startProgramLiveInFirestore(targetProgramId, madrasaId);
   }
 
+  Future<void> loadSavedScheduleDraftOrFirestore() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final draftStr = prefs.getString('draft_schedule_$_madrasaId');
+
+      if (draftStr != null && draftStr.isNotEmpty) {
+        final Map<String, dynamic> jsonMap = jsonDecode(draftStr);
+        final model = ScheduleModel.fromMap(jsonMap);
+        _isScheduleLocked = model.isLocked;
+
+        if (model.breaks.isNotEmpty) {
+          _customBreaks.clear();
+          _customBreaks.addAll(model.breaks.map((b) {
+            final parts = b.startTime.split(':');
+            final h = parts.isNotEmpty ? (int.tryParse(parts[0]) ?? 11) : 11;
+            final m = parts.length > 1 ? (int.tryParse(parts[1]) ?? 30) : 30;
+            return CustomBreakItem(
+              id: 'break-${DateTime.now().millisecondsSinceEpoch}',
+              title: b.title,
+              breakTime: TimeOfDay(hour: h, minute: m),
+              durationMinutes: b.duration,
+            );
+          }));
+        }
+
+        if (model.schedule.isNotEmpty) {
+          _scheduleSlots = model.schedule.map((s) {
+            final matchedProg = realPrograms.firstWhere(
+              (p) => p.programId == s.prgId,
+              orElse: () => ProgramModel(
+                programId: s.prgId,
+                participantName: s.participantNames.join(', '),
+                participantId: s.participantIds.isNotEmpty ? s.participantIds.first : '',
+                studentClass: 'Competition',
+                division: '',
+                category: s.prgType,
+                programName: s.prgName,
+                programType: s.prgType,
+                startTime: s.startTime,
+                endTime: s.endTime,
+                duration: '${s.durations} mins',
+                status: s.status,
+                order: s.order,
+                madrasaId: _madrasaId,
+                createdAt: '',
+              ),
+            ).toProgram();
+
+            return ScheduleSlot(
+              id: s.prgId.isNotEmpty ? s.prgId : 'slot-${s.order}',
+              type: SlotType.program,
+              title: s.prgName,
+              startTime: s.startTime,
+              endTime: s.endTime,
+              program: matchedProg,
+            );
+          }).toList();
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading saved schedule draft or firestore: $e');
+    }
+  }
+
+  void reInitMadrasaStreams() {
+    _fetchParticipantsFromFirestore();
+    _fetchProgramsFromFirestore();
+    _fetchPresentRecordsFromFirestore();
+    _fetchMarkRecordsFromFirestore();
+    _fetchTeamRecordsFromFirestore();
+    _fetchSideEventsFromFirestore();
+    _fetchCeremonialEventsFromFirestore();
+    loadSavedScheduleDraftOrFirestore();
+    generateAutoSchedule();
+  }
+
   Future<void> _loadUserSession() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      _isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
-      _userEmail = prefs.getString('userEmail') ?? '';
-      _userRole = prefs.getString('userRole') ?? 'Program Coordinator';
-      _madrasaId = prefs.getString('madrasaId') ?? '7020@tanzeem';
+      
+      // Check Web Cookies first, fallback to SharedPreferences / LocalStorage
+      final cookieEmail = await WebStorageHelper.getCookie('user_email');
+      final cookieRole = await WebStorageHelper.getCookie('user_role');
+      final cookieMadrasaId = await WebStorageHelper.getCookie('madrasa_id');
+
+      _isLoggedIn = prefs.getBool('isLoggedIn') ?? (cookieEmail != null && cookieEmail.isNotEmpty);
+      _userEmail = (cookieEmail != null && cookieEmail.isNotEmpty) ? cookieEmail : (prefs.getString('userEmail') ?? '');
+      _userRole = (cookieRole != null && cookieRole.isNotEmpty) ? cookieRole : (prefs.getString('userRole') ?? 'Program Coordinator');
+      _madrasaId = (cookieMadrasaId != null && cookieMadrasaId.isNotEmpty) ? cookieMadrasaId : (prefs.getString('madrasaId') ?? '7020@tanzeem');
       madrasaName = prefs.getString('madrasaName') ?? 'Tanzeem Central Institute';
+      _isScheduleLocked = prefs.getBool('isScheduleLocked_$_madrasaId') ?? false;
+
+      // Initialize Volatile RAM cache for session user
+      WebStorageHelper.setCacheMemory('active_user_session', {
+        'email': _userEmail,
+        'role': _userRole,
+        'madrasaId': _madrasaId,
+        'madrasaName': madrasaName,
+      });
+
+      reInitMadrasaStreams();
       notifyListeners();
     } catch (e) {
       debugPrint('Error loading user session: $e');
@@ -1040,19 +1253,64 @@ class AppState extends ChangeNotifier {
         await prefs.setString('userRole', role);
         if (madrasaId != null) await prefs.setString('madrasaId', madrasaId);
         if (name != null) await prefs.setString('madrasaName', name);
+
+        // Save Web Cookies with 30-day expiration
+        await WebStorageHelper.setCookie('tanzeem_session', 'active', maxAgeDays: 30);
+        await WebStorageHelper.setCookie('user_email', email, maxAgeDays: 30);
+        await WebStorageHelper.setCookie('user_role', role, maxAgeDays: 30);
+        if (madrasaId != null) await WebStorageHelper.setCookie('madrasa_id', madrasaId, maxAgeDays: 30);
       } else {
         await prefs.remove('isLoggedIn');
         await prefs.remove('userEmail');
         await prefs.remove('userRole');
         await prefs.remove('madrasaId');
         await prefs.remove('madrasaName');
+
+        // Clear Web Cookies and RAM Cache
+        await WebStorageHelper.clearAllCookies();
+        WebStorageHelper.clearCacheMemory();
       }
     } catch (e) {
       debugPrint('Error saving user session: $e');
     }
   }
 
+  // --- WEB MEMORY, CACHE & COOKIE MANAGEMENT CONTROLS ---
+
+  /// Clears in-memory volatile RAM cache
+  Future<void> clearAppCacheMemory() async {
+    WebStorageHelper.clearCacheMemory();
+    notifyListeners();
+  }
+
+  /// Clears local storage drafts and cached preference keys
+  Future<void> clearAppLocalMemory() async {
+    final prefs = await SharedPreferences.getInstance();
+    final keys = prefs.getKeys().where((k) => k.startsWith('draft_')).toList();
+    for (var k in keys) {
+      await prefs.remove(k);
+    }
+    notifyListeners();
+  }
+
+  /// Clears browser session cookies
+  Future<void> clearAppCookies() async {
+    await WebStorageHelper.clearAllCookies();
+    notifyListeners();
+  }
+
+  /// Wipes RAM Cache, Local Drafts & Cookies completely
+  Future<void> purgeAllWebMemoryAndCookies() async {
+    await WebStorageHelper.purgeAllStorageCacheAndCookies();
+    notifyListeners();
+  }
+
   void toggleTheme() {
+    if (_userRole != 'Super Admin') {
+      _isDarkMode = false;
+      notifyListeners();
+      return;
+    }
     _isDarkMode = !_isDarkMode;
     notifyListeners();
   }
@@ -1068,14 +1326,17 @@ class AppState extends ChangeNotifier {
   }
 
   Future<bool> login(String email, String password) async {
-    final cleanEmail = email.trim().toLowerCase();
+    final cleanEmail = SecurityUtils.sanitizeInput(email.trim().toLowerCase());
+    final cleanPassword = password.trim();
+
+    if (cleanEmail.isEmpty || cleanPassword.isEmpty) return false;
     
     // 1. Super Admin Firestore Verification ('admin' collection document / query)
     try {
       final querySnapshot = await FirebaseFirestore.instance
           .collection('admin')
           .where('email', isEqualTo: cleanEmail)
-          .where('password', isEqualTo: password)
+          .where('password', isEqualTo: cleanPassword)
           .get();
 
       if (querySnapshot.docs.isNotEmpty) {
@@ -1094,7 +1355,7 @@ class AppState extends ChangeNotifier {
         if (data != null) {
           final docEmail = (data['email'] ?? '').toString().trim().toLowerCase();
           final docPassword = (data['password'] ?? '').toString();
-          if (docEmail == cleanEmail && docPassword == password) {
+          if (docEmail == cleanEmail && docPassword == cleanPassword) {
             _userRole = 'Super Admin';
             _userEmail = cleanEmail;
             _isLoggedIn = true;
@@ -1107,17 +1368,6 @@ class AppState extends ChangeNotifier {
       }
     } catch (e) {
       debugPrint('Firestore Admin Auth check error: $e');
-    }
-
-    // Static fallback check if Firestore is offline
-    if (cleanEmail == 'admin@haris.tanzeem' && password == 'tanzeem@admin') {
-      _userRole = 'Super Admin';
-      _userEmail = cleanEmail;
-      _isLoggedIn = true;
-      _activeTabIndex = 0;
-      await _saveUserSession(true, _userEmail, _userRole);
-      notifyListeners();
-      return true;
     }
     
     // 2. Program Coordinator Real Role-Based Authentication (querying registered madrasa credentials in Firestore)
@@ -1141,6 +1391,7 @@ class AppState extends ChangeNotifier {
 
         updateMadrasaOnlineStatus(cleanEmail, true);
         await _saveUserSession(true, _userEmail, _userRole, madrasaId: _madrasaId, name: madrasaName);
+        reInitMadrasaStreams();
         notifyListeners();
         return true;
       }
@@ -1163,6 +1414,7 @@ class AppState extends ChangeNotifier {
 
       updateMadrasaOnlineStatus(cleanEmail, true);
       await _saveUserSession(true, _userEmail, _userRole, madrasaId: _madrasaId, name: madrasaName);
+      reInitMadrasaStreams();
       notifyListeners();
       return true;
     }
@@ -1258,6 +1510,17 @@ class AppState extends ChangeNotifier {
   }
 
   void updateProgramStatus(String id, ProgramStatus newStatus) {
+    updateProgramStatusInFirestore(id, _madrasaId, newStatus);
+  }
+
+  /// Updates program status locally & syncs to Cloud Firestore under madrasa/{madrasaId}/programs/{id}
+  Future<bool> updateProgramStatusInFirestore(String id, String madrasaId, ProgramStatus newStatus) async {
+    String statusStr = 'pending';
+    if (newStatus == ProgramStatus.live) statusStr = 'live';
+    if (newStatus == ProgramStatus.completed) statusStr = 'completed';
+    if (newStatus == ProgramStatus.cancelled) statusStr = 'cancelled';
+
+    // 1. Update in-memory _programs list
     int idx = _programs.indexWhere((p) => p.id == id);
     if (idx != -1) {
       _programs[idx].status = newStatus;
@@ -1266,8 +1529,56 @@ class AppState extends ChangeNotifier {
         _liveTimerRemainingSeconds = _programs[idx].durationMinutes * 60;
         startLiveTimer();
       }
-      notifyListeners();
     }
+
+    // 2. Update _realPrograms list
+    int realIdx = _realPrograms.indexWhere((rp) => rp.programId == id);
+    if (realIdx != -1) {
+      final rp = _realPrograms[realIdx];
+      _realPrograms[realIdx] = ProgramModel(
+        programId: rp.programId,
+        participantName: rp.participantName,
+        participantId: rp.participantId,
+        studentClass: rp.studentClass,
+        division: rp.division,
+        category: rp.category,
+        programName: rp.programName,
+        programType: rp.programType,
+        startTime: rp.startTime,
+        endTime: rp.endTime,
+        duration: rp.duration,
+        status: statusStr,
+        order: rp.order,
+        madrasaId: rp.madrasaId.isNotEmpty ? rp.madrasaId : madrasaId,
+        createdAt: rp.createdAt,
+      );
+    }
+
+    // 3. Update schedule slots
+    for (var s in _scheduleSlots) {
+      if (s.id == id || (s.program != null && s.program!.id == id)) {
+        if (s.program != null) {
+          s.program!.status = newStatus;
+        }
+      }
+    }
+
+    // 4. Sync to Cloud Firestore document
+    final targetMadrasa = madrasaId.isNotEmpty ? madrasaId : _madrasaId;
+    try {
+      await FirebaseFirestore.instance
+          .collection('madrasa')
+          .doc(targetMadrasa)
+          .collection('programs')
+          .doc(id)
+          .set({'status': statusStr}, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('Error updating program $id status in Firestore: $e');
+    }
+
+    saveScheduleDraftLocally();
+    notifyListeners();
+    return true;
   }
 
   void deleteProgram(String id) {
@@ -1324,8 +1635,16 @@ class AppState extends ChangeNotifier {
     int participantGapMins = 20,
     bool autoShiftOnCancel = true,
   }) {
+    // 1. Strictly use ONLY actual real created programs from Firestore!
+    final actualRealPrograms = realPrograms.map((p) => p.toProgram()).toList();
+
+    // 2. Include user-added ceremonial opening and closing events
+    final ceremonialPrograms = ceremonialEvents.map((c) => c.toProgram()).toList();
+
+    final allUserPrograms = [...ceremonialPrograms, ...actualRealPrograms];
+
     _scheduleSlots = ScheduleGenerator.generateSchedule(
-      programs: _programs,
+      programs: allUserPrograms,
       startTime: defaultStartTime,
       dhuhrTime: dhuhrPrayerTime,
       asrTime: asrPrayerTime,
@@ -1340,14 +1659,50 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  void reorderScheduleSlots(int oldIndex, int newIndex) {
+    if (_isScheduleLocked) return;
+    if (newIndex > oldIndex) newIndex -= 1;
+    final item = _scheduleSlots.removeAt(oldIndex);
+    _scheduleSlots.insert(newIndex, item);
+
+    // Recalculate start and end times sequentially
+    DateTime now = DateTime.now();
+    DateTime current = DateTime(now.year, now.month, now.day, defaultStartTime.hour, defaultStartTime.minute);
+    final timeFormat = DateFormat('hh:mm a');
+
+    for (int i = 0; i < _scheduleSlots.length; i++) {
+      var slot = _scheduleSlots[i];
+      DateTime start = current;
+      int durMins = slot.program?.durationMinutes ?? 12;
+      DateTime end = start.add(Duration(minutes: durMins));
+      current = end.add(const Duration(seconds: 60)); // stage setup buffer
+
+      _scheduleSlots[i] = ScheduleSlot(
+        id: slot.id,
+        type: slot.type,
+        title: slot.title,
+        startTime: timeFormat.format(start),
+        endTime: timeFormat.format(end),
+        program: slot.program,
+      );
+    }
+
+    saveScheduleDraftLocally();
+    notifyListeners();
+  }
+
   void addCustomBreak(CustomBreakItem breakItem) {
     _customBreaks.add(breakItem);
     generateAutoSchedule();
+    saveScheduleDraftLocally();
+    notifyListeners();
   }
 
   void removeCustomBreak(String id) {
     _customBreaks.removeWhere((b) => b.id == id);
     generateAutoSchedule();
+    saveScheduleDraftLocally();
+    notifyListeners();
   }
 
   // Live Timer Controls

@@ -1,4 +1,5 @@
-// Library: add_opening_event_sheet.dart
+library;
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -512,7 +513,7 @@ class _AddOpeningEventSheetState extends State<AddOpeningEventSheet> {
                                 Navigator.of(context).pop();
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
-                                    content: Text('✨ $savedCount Ceremonial / Opening event(s) saved to Secured Database!'),
+                                    content: Text('✨ $savedCount Ceremonial / Opening event(s) saved successfully!'),
                                     backgroundColor: AppColors.success,
                                   ),
                                 );
@@ -520,8 +521,8 @@ class _AddOpeningEventSheetState extends State<AddOpeningEventSheet> {
                             },
                       icon: _isSaving
                           ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                          : const Icon(Icons.cloud_upload_rounded, size: 18),
-                      label: Text(_isSaving ? 'Saving...' : 'Save All Tabs to Secured DB', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+                          : const Icon(Icons.check_rounded, size: 18),
+                      label: Text(_isSaving ? 'Saving...' : 'Save All Ceremonial Events', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,

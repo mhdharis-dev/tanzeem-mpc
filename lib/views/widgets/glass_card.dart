@@ -1,5 +1,6 @@
 // Library: glass_card.dart
 import 'dart:ui';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/providers/app_state.dart';
@@ -28,30 +29,34 @@ class GlassCard extends StatelessWidget {
     final appState = Provider.of<AppState>(context);
     final isDark = appState.isDarkMode;
 
-    final bgColor = customBgColor ?? (isDark ? AppColors.cardDark.withAlpha(200) : Colors.white.withAlpha(240));
+    final bgColor = customBgColor ?? (isDark ? AppColors.cardDark : Colors.white);
     final borderColor = customBorderColor ?? (isDark ? AppColors.glassBorderDark : AppColors.glassBorderLight);
+
+    final cardContent = Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(borderRadius),
+        border: Border.all(color: borderColor, width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: isDark ? AppColors.shadowDark : AppColors.shadowLight,
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: child,
+    );
 
     Widget container = ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-        child: Container(
-          padding: padding,
-          decoration: BoxDecoration(
-            color: bgColor,
-            borderRadius: BorderRadius.circular(borderRadius),
-            border: Border.all(color: borderColor, width: 1.2),
-            boxShadow: [
-              BoxShadow(
-                color: isDark ? AppColors.shadowDark : AppColors.shadowLight,
-                blurRadius: 20,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: child,
-        ),
-      ),
+      child: kIsWeb
+          ? cardContent
+          : BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: cardContent,
+            ),
     );
 
     if (onTap != null) {

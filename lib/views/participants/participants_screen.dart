@@ -9,6 +9,7 @@ import '../../core/models/team_model.dart';
 import '../../core/providers/app_state.dart';
 import '../../core/theme/app_colors.dart';
 import '../widgets/glass_card.dart';
+import '../../core/utils/responsive.dart';
 
 class ParticipantsScreen extends StatefulWidget {
   const ParticipantsScreen({super.key});
@@ -78,16 +79,21 @@ class _ParticipantsScreenState extends State<ParticipantsScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
-        return Container(
-          height: MediaQuery.of(context).size.height * 0.85,
-          decoration: BoxDecoration(
-            color: isDark ? AppColors.cardDark : Colors.white,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-            border: Border.all(color: isDark ? AppColors.glassBorderDark : AppColors.glassBorderLight),
-          ),
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        return Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+          child: Container(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(ctx).size.height * 0.90,
+            ),
+            decoration: BoxDecoration(
+              color: isDark ? AppColors.cardDark : Colors.white,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+              border: Border.all(color: isDark ? AppColors.glassBorderDark : AppColors.glassBorderLight),
+            ),
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Handle bar
               Center(
@@ -363,9 +369,10 @@ class _ParticipantsScreenState extends State<ParticipantsScreen> {
               ),
             ],
           ),
-        );
-      },
-    );
+        ),
+      );
+    },
+  );
   }
 
   void _showAddParticipantBottomSheet(BuildContext context, AppState appState) {
@@ -565,10 +572,12 @@ class _ParticipantsScreenState extends State<ParticipantsScreen> {
                                 prefixIcon: Icon(Icons.category_outlined, size: 20),
                               ),
                               items: const [
+                                DropdownMenuItem(value: 'Primary', child: Text('Primary')),
                                 DropdownMenuItem(value: 'Sub-Junior', child: Text('Sub-Junior')),
                                 DropdownMenuItem(value: 'Junior', child: Text('Junior')),
                                 DropdownMenuItem(value: 'Senior', child: Text('Senior')),
                                 DropdownMenuItem(value: 'Super Senior', child: Text('Super Senior')),
+                                DropdownMenuItem(value: 'Alumni', child: Text('Alumni')),
                               ],
                               onChanged: (val) {
                                 if (val != null) setState(() => selectedCategory = val);
@@ -769,7 +778,7 @@ class _ParticipantsScreenState extends State<ParticipantsScreen> {
       backgroundColor: Colors.transparent,
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.all(28.0),
+        padding: EdgeInsets.all(Responsive.getPadding(context)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -889,7 +898,7 @@ class _ParticipantsScreenState extends State<ParticipantsScreen> {
                           const SizedBox(height: 4),
                           Wrap(
                             spacing: 6,
-                            children: ['All', 'Sub-Junior', 'Junior', 'Senior', 'Super Senior'].map((cat) {
+                            children: ['All', 'Primary', 'Sub-Junior', 'Junior', 'Senior', 'Super Senior' , 'Alumni'].map((cat) {
                               final isSel = _selectedCategoryFilter == cat;
                               return ChoiceChip(
                                 label: Text(cat, style: GoogleFonts.poppins(fontSize: 11, fontWeight: isSel ? FontWeight.bold : FontWeight.normal)),

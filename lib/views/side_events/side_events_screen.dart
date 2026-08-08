@@ -5,6 +5,7 @@ import '../../core/models/side_event_model.dart';
 import '../../core/providers/app_state.dart';
 import '../../core/theme/app_colors.dart';
 import '../widgets/glass_card.dart';
+import '../../core/utils/responsive.dart';
 import 'add_side_event_sheet.dart';
 import 'side_event_pdf_service.dart';
 
@@ -843,6 +844,7 @@ class _SideEventsScreenState extends State<SideEventsScreen> {
     }
 
     int activeRoundIndex = 0;
+    final Map<String, TextEditingController> dialogControllers = {};
 
     showDialog(
       context: context,
@@ -1143,7 +1145,7 @@ class _SideEventsScreenState extends State<SideEventsScreen> {
                               ),
                               child: TextField(
                                 readOnly: isCompleted,
-                                controller: TextEditingController(text: '${activeRound.minPointToPass}'),
+                                controller: dialogControllers.putIfAbsent('min_pass_${activeRound.roundNumber}', () => TextEditingController(text: '${activeRound.minPointToPass}')),
                                 keyboardType: TextInputType.number,
                                 textAlign: TextAlign.center,
                                 onChanged: (val) {
@@ -1249,7 +1251,7 @@ class _SideEventsScreenState extends State<SideEventsScreen> {
                                         ),
                                         child: TextField(
                                           readOnly: isCompleted,
-                                          controller: TextEditingController(text: '${p.roundPoint}'),
+                                          controller: dialogControllers.putIfAbsent('p_round_${activeRound.roundNumber}_${p.participantId}', () => TextEditingController(text: '${p.roundPoint}')),
                                           keyboardType: TextInputType.number,
                                           textAlign: TextAlign.center,
                                           style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: isDark ? AppColors.textLight : AppColors.textDark),
@@ -1397,7 +1399,7 @@ class _SideEventsScreenState extends State<SideEventsScreen> {
       backgroundColor: Colors.transparent,
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.all(28.0),
+        padding: EdgeInsets.all(Responsive.getPadding(context)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1590,7 +1592,7 @@ class _SideEventsScreenState extends State<SideEventsScreen> {
                         child: SingleChildScrollView(
                           scrollDirection: Axis.horizontal,
                           child: Row(
-                            children: ['All', 'Sub-Junior', 'Junior', 'Senior', 'Super Senior'].map((cat) {
+                            children: ['All', 'Primary', 'Sub-Junior', 'Junior', 'Senior', 'Super Senior', 'Alumni'].map((cat) {
                               bool isSel = _selectedCategory == cat;
                               return Padding(
                                 padding: const EdgeInsets.only(right: 8.0),

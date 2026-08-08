@@ -72,6 +72,12 @@ class _AddTeamSheetState extends State<AddTeamSheet> {
     '0xFFF97316', // Orange
   ];
 
+  late TextEditingController _overallPointController;
+  late TextEditingController _firstCountController;
+  late TextEditingController _secondCountController;
+  late TextEditingController _thirdCountController;
+  late TextEditingController _autoTeamIdController;
+
   @override
   void initState() {
     super.initState();
@@ -105,12 +111,23 @@ class _AddTeamSheetState extends State<AddTeamSheet> {
       _secondMedals.addAll(medals.secondMedals);
       _thirdMedals.addAll(medals.thirdMedals);
     }
+
+    _overallPointController = TextEditingController(text: '$_overallPoint');
+    _firstCountController = TextEditingController(text: '$_firstCount');
+    _secondCountController = TextEditingController(text: '$_secondCount');
+    _thirdCountController = TextEditingController(text: '$_thirdCount');
+    _autoTeamIdController = TextEditingController();
   }
 
   @override
   void dispose() {
     _teamNameController.dispose();
     _teamHouseController.dispose();
+    _overallPointController.dispose();
+    _firstCountController.dispose();
+    _secondCountController.dispose();
+    _thirdCountController.dispose();
+    _autoTeamIdController.dispose();
     super.dispose();
   }
 
@@ -248,7 +265,7 @@ class _AddTeamSheetState extends State<AddTeamSheet> {
                       Expanded(
                         child: TextField(
                           readOnly: true,
-                          controller: TextEditingController(text: autoTeamId),
+                          controller: _autoTeamIdController..text = autoTeamId,
                           decoration: InputDecoration(
                             labelText: 'Team ID (Auto)',
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
@@ -760,7 +777,7 @@ class _AddTeamSheetState extends State<AddTeamSheet> {
                       // Overall Points Input
                       Expanded(
                         child: TextField(
-                          controller: TextEditingController(text: '$_overallPoint'),
+                          controller: _overallPointController,
                           keyboardType: TextInputType.number,
                           onChanged: (val) => _overallPoint = int.tryParse(val) ?? 0,
                           decoration: InputDecoration(
@@ -775,7 +792,7 @@ class _AddTeamSheetState extends State<AddTeamSheet> {
                       // 1st Place Medals Count
                       Expanded(
                         child: TextField(
-                          controller: TextEditingController(text: '$_firstCount'),
+                          controller: _firstCountController,
                           keyboardType: TextInputType.number,
                           onChanged: (val) => _firstCount = int.tryParse(val) ?? 0,
                           decoration: InputDecoration(
@@ -789,7 +806,7 @@ class _AddTeamSheetState extends State<AddTeamSheet> {
                       // 2nd Place Medals Count
                       Expanded(
                         child: TextField(
-                          controller: TextEditingController(text: '$_secondCount'),
+                          controller: _secondCountController,
                           keyboardType: TextInputType.number,
                           onChanged: (val) => _secondCount = int.tryParse(val) ?? 0,
                           decoration: InputDecoration(
@@ -803,7 +820,7 @@ class _AddTeamSheetState extends State<AddTeamSheet> {
                       // 3rd Place Medals Count
                       Expanded(
                         child: TextField(
-                          controller: TextEditingController(text: '$_thirdCount'),
+                          controller: _thirdCountController,
                           keyboardType: TextInputType.number,
                           onChanged: (val) => _thirdCount = int.tryParse(val) ?? 0,
                           decoration: InputDecoration(
@@ -860,6 +877,7 @@ class _AddTeamSheetState extends State<AddTeamSheet> {
                       thirdCount: _thirdCount,
                       thirdMedals: _thirdMedals,
                     ),
+                    madrasaId: widget.initialTeam?.madrasaId.isNotEmpty == true ? widget.initialTeam!.madrasaId : appState.madrasaId,
                   );
 
                   final nav = Navigator.of(context);

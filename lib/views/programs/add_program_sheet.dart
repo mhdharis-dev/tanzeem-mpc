@@ -616,7 +616,10 @@ class _AddProgramSheetState extends State<AddProgramSheet> {
               width: double.infinity,
               height: 52,
               child: ElevatedButton.icon(
-                onPressed: () => _saveAllTabs(context, appState),
+                onPressed: () {
+                  _saveAllTabs(context, appState);
+                  Navigator.pop(context);
+                },
                 icon: const Icon(Icons.save_rounded, size: 20),
                 label: Text(
                   widget.programToEdit != null

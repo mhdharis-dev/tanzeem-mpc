@@ -445,18 +445,20 @@ class _LiveStageScreenState extends State<LiveStageScreen> {
 
                                       // MARK COMPLETE & CALL NEXT BUTTON
                                       ElevatedButton.icon(
-                                        onPressed: () {
-                                          appState.updateProgramStatus(currentProg.id, ProgramStatus.completed);
-                                          if (hasNext) {
-                                            appState.nextLiveProgram();
-                                          }
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            const SnackBar(
-                                              content: Text('✅ Program completed! Next item loaded on stage.'),
-                                              backgroundColor: AppColors.success,
-                                            ),
-                                          );
-                                        },
+                                        onPressed: hasCurrent
+                                            ? () {
+                                                appState.updateProgramStatus(currentProg.id, ProgramStatus.completed);
+                                                if (hasNext) {
+                                                  appState.nextLiveProgram();
+                                                }
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  const SnackBar(
+                                                    content: Text('✅ Program completed! Next item loaded on stage.'),
+                                                    backgroundColor: AppColors.success,
+                                                  ),
+                                                );
+                                              }
+                                            : null,
                                         icon: const Icon(Icons.check_circle_rounded, size: 20),
                                         label: Text('✅ Mark Complete & Next', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13)),
                                         style: ElevatedButton.styleFrom(
@@ -465,6 +467,34 @@ class _LiveStageScreenState extends State<LiveStageScreen> {
                                           padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
                                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                           elevation: 3,
+                                        ),
+                                      ),
+
+                                      // CANCEL ITEM BUTTON
+                                      OutlinedButton.icon(
+                                        onPressed: hasCurrent
+                                            ? () async {
+                                                final progId = currentProg.id;
+                                                await appState.cancelProgramInFirestore(progId, appState.madrasaId);
+                                                if (hasNext) {
+                                                  appState.nextLiveProgram();
+                                                }
+                                                if (context.mounted) {
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                    SnackBar(
+                                                      content: Text('🚫 Program $progId marked as CANCELLED.'),
+                                                      backgroundColor: Colors.orange,
+                                                    ),
+                                                  );
+                                                }
+                                              }
+                                            : null,
+                                        icon: const Icon(Icons.block_rounded, size: 18, color: Colors.orange),
+                                        label: Text('Cancel Item 🚫', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12.5, color: Colors.orange)),
+                                        style: OutlinedButton.styleFrom(
+                                          side: const BorderSide(color: Colors.orange, width: 1.5),
+                                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                         ),
                                       ),
 

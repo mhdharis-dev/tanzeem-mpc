@@ -1,31 +1,16 @@
 import 'package:go_router/go_router.dart';
 import '../providers/app_state.dart';
-import '../../views/splash/splash_screen.dart';
 import '../../views/login/login_screen.dart';
 import '../../views/main_layout.dart';
 
 class AppRouter {
-  static bool _hasFinishedSplash = false;
-
   static GoRouter createRouter(AppState appState) {
     return GoRouter(
-      initialLocation: _hasFinishedSplash ? (appState.isLoggedIn ? '/' : '/login') : '/splash',
+      initialLocation: appState.isLoggedIn ? '/' : '/login',
       refreshListenable: appState,
       redirect: (context, state) {
         final isLoggedIn = appState.isLoggedIn;
-        final isSplash = state.matchedLocation == '/splash';
         final isLoggingIn = state.matchedLocation == '/login';
-
-        // Allow splash screen animation to play once on app startup
-        if (isSplash) {
-          if (_hasFinishedSplash) {
-            return isLoggedIn ? '/' : '/login';
-          }
-          return null;
-        }
-
-        // Mark splash as finished once initial navigation occurs
-        _hasFinishedSplash = true;
 
         // Redirect unauthenticated users to /login
         if (!isLoggedIn && !isLoggingIn) {
@@ -40,11 +25,6 @@ class AppRouter {
         return null;
       },
       routes: [
-        GoRoute(
-          path: '/splash',
-          name: 'splash',
-          builder: (context, state) => const SplashScreen(),
-        ),
         GoRoute(
           path: '/login',
           name: 'login',

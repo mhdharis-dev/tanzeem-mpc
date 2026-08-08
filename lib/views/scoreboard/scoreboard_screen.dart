@@ -6,6 +6,7 @@ import '../../core/models/team_model.dart';
 import '../../core/providers/app_state.dart';
 import '../../core/theme/app_colors.dart';
 import '../widgets/glass_card.dart';
+import '../../core/utils/responsive.dart';
 import 'scoreboard_pdf_service.dart';
 
 class ScoreboardScreen extends StatefulWidget {
@@ -18,63 +19,12 @@ class ScoreboardScreen extends StatefulWidget {
 class _ScoreboardScreenState extends State<ScoreboardScreen> {
   String _selectedCategoryScope = 'Overall Championship';
 
-  final List<TeamModel> _defaultDemoTeams = [
-    TeamModel(
-      teamId: 'team-001',
-      teamName: 'Al-Fath',
-      teamHouse: 'Red House',
-      houseColor: '0xFFEF4444',
-      teamCaptain: TeamMemberModel(participantId: 'P101', participantName: 'Muhammed Sinan', participantClass: '10', participantDiv: 'A'),
-      teamViceCaptain: TeamMemberModel(participantId: 'P102', participantName: 'Ahmad Raihan', participantClass: '9', participantDiv: 'B'),
-      totalMembers: 32,
-      overallPoint: 485,
-      members: [],
-      overallMedals: TeamMedalsModel(firstCount: 8, secondCount: 5, thirdCount: 4),
-    ),
-    TeamModel(
-      teamId: 'team-002',
-      teamName: 'Badr',
-      teamHouse: 'Green House',
-      houseColor: '0xFF10B981',
-      teamCaptain: TeamMemberModel(participantId: 'P201', participantName: 'Bilal Hassan', participantClass: '10', participantDiv: 'A'),
-      teamViceCaptain: TeamMemberModel(participantId: 'P202', participantName: 'Zayd Muhammed', participantClass: '9', participantDiv: 'A'),
-      totalMembers: 30,
-      overallPoint: 440,
-      members: [],
-      overallMedals: TeamMedalsModel(firstCount: 6, secondCount: 7, thirdCount: 3),
-    ),
-    TeamModel(
-      teamId: 'team-003',
-      teamName: 'Uhud',
-      teamHouse: 'Blue House',
-      houseColor: '0xFF3B82F6',
-      teamCaptain: TeamMemberModel(participantId: 'P301', participantName: 'Hamza Ibrahim', participantClass: '10', participantDiv: 'B'),
-      teamViceCaptain: TeamMemberModel(participantId: 'P302', participantName: 'Omar Mukhtar', participantClass: '9', participantDiv: 'B'),
-      totalMembers: 28,
-      overallPoint: 395,
-      members: [],
-      overallMedals: TeamMedalsModel(firstCount: 5, secondCount: 4, thirdCount: 6),
-    ),
-    TeamModel(
-      teamId: 'team-004',
-      teamName: 'Yarmouk',
-      teamHouse: 'Gold House',
-      houseColor: '0xFFF59E0B',
-      teamCaptain: TeamMemberModel(participantId: 'P401', participantName: 'Khalid Waleed', participantClass: '10', participantDiv: 'A'),
-      teamViceCaptain: TeamMemberModel(participantId: 'P402', participantName: 'Tariq Ziyad', participantClass: '9', participantDiv: 'A'),
-      totalMembers: 29,
-      overallPoint: 360,
-      members: [],
-      overallMedals: TeamMedalsModel(firstCount: 4, secondCount: 5, thirdCount: 5),
-    ),
-  ];
-
   @override
   Widget build(BuildContext context) {
     final appState = Provider.of<AppState>(context);
     final isDark = appState.isDarkMode;
 
-    final realTeams = appState.teamRecords.isNotEmpty ? appState.teamRecords : _defaultDemoTeams;
+    final realTeams = appState.teamRecords;
 
     // 1. Calculate Dynamic Team Standings based on scope filter
     final List<TeamModel> computedTeams = realTeams.map((t) {
@@ -195,7 +145,7 @@ class _ScoreboardScreenState extends State<ScoreboardScreen> {
       backgroundColor: Colors.transparent,
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.all(28.0),
+        padding: EdgeInsets.all(Responsive.getPadding(context)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -302,10 +252,12 @@ class _ScoreboardScreenState extends State<ScoreboardScreen> {
               child: Row(
                 children: [
                   'Overall Championship',
+                  'Primary Category',
                   'Sub-Junior Category',
                   'Junior Category',
                   'Senior Category',
-                  'Super Senior Category'
+                  'Super Senior Category',
+                  'Alumni Category'
                 ].map((scope) {
                   final isSel = _selectedCategoryScope == scope;
                   return Padding(

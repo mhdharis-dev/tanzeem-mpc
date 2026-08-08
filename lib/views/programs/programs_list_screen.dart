@@ -7,6 +7,7 @@ import '../../core/models/program_model.dart';
 import '../../core/providers/app_state.dart';
 import '../../core/theme/app_colors.dart';
 import '../widgets/glass_card.dart';
+import '../../core/utils/responsive.dart';
 import 'add_program_sheet.dart';
 
 class ProgramsListScreen extends StatefulWidget {
@@ -271,7 +272,7 @@ class _ProgramsListScreenState extends State<ProgramsListScreen> {
       backgroundColor: Colors.transparent,
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.all(24.0),
+        padding: EdgeInsets.all(Responsive.getPadding(context)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -490,7 +491,7 @@ class _ProgramsListScreenState extends State<ProgramsListScreen> {
                         context,
                         label: 'Category',
                         value: appState.selectedCategoryFilter,
-                        items: ['All', 'Sub-Junior' , 'Junior', 'Senior', 'Super Senior'],
+                        items: ['All','Primary' , 'Sub-Junior' , 'Junior', 'Senior', 'Super Senior' , 'Alumni'],
                         onChanged: (val) => appState.setCategoryFilter(val!),
                         icon: Icons.workspace_premium_rounded,
                         isDark: isDark,

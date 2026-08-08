@@ -21,6 +21,13 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _errorMessage;
   bool _isLoading = false;
 
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
   Future<void> _handleLogin(AppState appState, String email, String password) async {
     setState(() {
       _isLoading = true;
@@ -292,11 +299,17 @@ class _LoginScreenState extends State<LoginScreen> {
                         const SizedBox(height: 8),
                         TextField(
                           controller: _emailController,
+                          keyboardType: TextInputType.emailAddress,
+                          textInputAction: TextInputAction.next,
                           decoration: const InputDecoration(
                             prefixIcon: Icon(Icons.email_outlined, size: 20),
                             hintText: 'Enter your email',
                           ),
-                          onChanged: (_) => setState(() => _errorMessage = null),
+                          onChanged: (_) {
+                            if (_errorMessage != null) {
+                              setState(() => _errorMessage = null);
+                            }
+                          },
                         ),
 
                         const SizedBox(height: 20),
@@ -306,6 +319,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         TextField(
                           controller: _passwordController,
                           obscureText: _obscurePassword,
+                          textInputAction: TextInputAction.done,
+                          onSubmitted: (_) => _handleLogin(appState, _emailController.text, _passwordController.text),
                           decoration: InputDecoration(
                             prefixIcon: const Icon(Icons.lock_outline_rounded, size: 20),
                             suffixIcon: IconButton(
@@ -314,7 +329,11 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             hintText: 'Enter your password',
                           ),
-                          onChanged: (_) => setState(() => _errorMessage = null),
+                          onChanged: (_) {
+                            if (_errorMessage != null) {
+                              setState(() => _errorMessage = null);
+                            }
+                          },
                         ),
 
                         const SizedBox(height: 28),

@@ -8,6 +8,7 @@ import '../../core/providers/app_state.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/whatsapp_helper.dart';
 import '../widgets/glass_card.dart';
+import '../../core/utils/responsive.dart';
 
 class SuperAdminScreen extends StatelessWidget {
   const SuperAdminScreen({super.key});
@@ -615,7 +616,7 @@ class SuperAdminScreen extends StatelessWidget {
       backgroundColor: Colors.transparent,
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.all(28.0),
+        padding: EdgeInsets.all(Responsive.getPadding(context)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

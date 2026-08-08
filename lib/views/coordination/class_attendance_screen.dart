@@ -419,7 +419,7 @@ class _ClassAttendanceScreenState extends State<ClassAttendanceScreen> {
                         context,
                         label: 'Category Filter',
                         value: _selectedCategoryFilter,
-                        items: ['All Categories', 'Sub-Junior' , 'Junior', 'Senior', 'Super Senior'],
+                        items: ['All Categories','Primary' , 'Sub-Junior' , 'Junior', 'Senior', 'Super Senior', 'Alumni'],
                         onChanged: (val) => setState(() => _selectedCategoryFilter = val!),
                         icon: Icons.workspace_premium_rounded,
                         isDark: isDark,

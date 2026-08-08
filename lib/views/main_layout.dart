@@ -27,6 +27,8 @@ import 'about/about_screen.dart';
 
 import 'widgets/logout_dialog.dart';
 
+import '../core/utils/responsive.dart';
+
 class MainLayout extends StatelessWidget {
   const MainLayout({super.key});
 
@@ -34,6 +36,7 @@ class MainLayout extends StatelessWidget {
   Widget build(BuildContext context) {
     final appState = Provider.of<AppState>(context);
     final isDark = appState.isDarkMode;
+    final isMobile = Responsive.isMobile(context);
 
     final List<Widget> pages = appState.userRole == 'Super Admin'
         ? [
@@ -141,28 +144,36 @@ class MainLayout extends StatelessWidget {
       },
       child: Focus(
         autofocus: true,
-        child: Scaffold(
-          backgroundColor: isDark ? AppColors.bgDark : AppColors.bgLight,
-          body: Row(
-            children: [
-              // Collapsible Left Navigation Sidebar
-              const AppSidebar(),
+        child: MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            textScaler: TextScaler.linear(Responsive.getFontSizeScale(context)),
+          ),
+          child: Scaffold(
+            backgroundColor: isDark ? AppColors.bgDark : AppColors.bgLight,
+            drawer: isMobile ? const Drawer(child: AppSidebar(isDrawer: true)) : null,
+            body: Row(
+              children: [
+                // Collapsible Left Navigation Sidebar (Hidden on Mobile, available in Drawer)
+                if (!isMobile) const AppSidebar(),
 
-              // Main Body Shell (Sticky Top Bar + Active Screen View)
-              Expanded(
-                child: Column(
-                  children: [
-                    const HeaderAppBar(),
-                    Expanded(
-                      child: LazyIndexedStack(
-                        index: appState.activeTabIndex.clamp(0, pages.length - 1),
-                        children: pages,
-                      ),
+                // Main Body Shell (Sticky Top Bar + Active Screen View) centered with TVContainer
+                Expanded(
+                  child: TVContainer(
+                    child: Column(
+                      children: [
+                        const HeaderAppBar(),
+                        Expanded(
+                          child: LazyIndexedStack(
+                            index: appState.activeTabIndex.clamp(0, pages.length - 1),
+                            children: pages,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

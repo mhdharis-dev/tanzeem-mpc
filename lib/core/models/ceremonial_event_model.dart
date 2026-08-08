@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'models.dart';
 
 class CeremonialEventModel {
   final String eventId;
@@ -22,6 +23,29 @@ class CeremonialEventModel {
     required this.position,
     required this.createdAt,
   });
+
+  Program toProgram() {
+    final isOpening = position.toLowerCase().contains('start') || programType.toLowerCase().contains('open');
+    String studentInfo = personName.trim().isNotEmpty
+        ? (personDesignation.trim().isNotEmpty ? '$personName ($personDesignation)' : personName)
+        : 'Festival Committee & Dignitaries';
+
+    return Program(
+      id: eventId,
+      number: isOpening ? 'OPENING' : 'CLOSING',
+      studentName: studentInfo,
+      studentPhoto: '',
+      studentClass: isOpening ? 'Opening Event' : 'Closing Event',
+      category: isOpening ? 'Opening Ceremonial' : 'Closing Ceremonial',
+      item: programName,
+      durationMinutes: durationMinutes > 0 ? durationMinutes : 15,
+      stage: 'Stage 1 (Main Stage)',
+      status: ProgramStatus.pending,
+      startTime: '',
+      teacher: 'Meelad Committee',
+      priority: 'High',
+    );
+  }
 
   Map<String, dynamic> toMap() {
     return {

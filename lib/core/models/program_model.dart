@@ -127,6 +127,7 @@ class ProgramModel {
       startTime: startTime,
       teacher: 'Co-ordinator',
       priority: 'Medium',
+      madrasaId: madrasaId,
     );
   }
 
