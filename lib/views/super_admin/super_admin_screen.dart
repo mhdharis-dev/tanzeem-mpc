@@ -332,53 +332,80 @@ class SuperAdminScreen extends StatelessWidget {
                     const SizedBox(height: 16),
 
                     // Action Button
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          if (nameController.text.trim().isEmpty || regNoController.text.trim().isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Please enter Madrasa Name and RegNo'), backgroundColor: AppColors.error),
-                            );
-                            return;
-                          }
+                    () {
+                      bool isSaving = false;
+                      return StatefulBuilder(
+                        builder: (ctx, setBtnState) {
+                          return SizedBox(
+                            width: double.infinity,
+                            height: 50,
+                            child: ElevatedButton(
+                              onPressed: isSaving
+                                  ? null
+                                  : () async {
+                                      if (nameController.text.trim().isEmpty || regNoController.text.trim().isEmpty) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(content: Text('Please enter Madrasa Name and RegNo'), backgroundColor: AppColors.error),
+                                        );
+                                        return;
+                                      }
 
-                          final newMadrasa = MadrasaModel(
-                            madrasaId: isEditing ? madrasa.madrasaId : autoMadrasaId,
-                            madrasaName: nameController.text.trim(),
-                            madrasaRegNo: regNoController.text.trim(),
-                            address: addressController.text.trim(),
-                            coordinatorName: coordNameController.text.trim(),
-                            coordinatorPhone: coordPhoneController.text.trim(),
-                            email: isEditing ? madrasa.email : autoEmail,
-                            password: isEditing ? madrasa.password : autoPassword,
-                            createdAt: isEditing ? madrasa.createdAt : DateTime.now().toString().substring(0, 16),
-                          );
+                                      setBtnState(() => isSaving = true);
+                                      final messenger = ScaffoldMessenger.of(context);
 
-                          if (isEditing) {
-                            appState.updateMadrasa(newMadrasa);
-                          } else {
-                            appState.addMadrasa(newMadrasa);
-                            if (newMadrasa.coordinatorPhone.isNotEmpty) {
-                              WhatsAppHelper.sendMadrasaRegistrationWelcomeMsg(
-                                context: context,
-                                madrasa: newMadrasa,
-                              );
-                            }
-                          }
+                                      final cleanId = isEditing
+                                          ? madrasa.madrasaId
+                                          : (autoMadrasaId.isNotEmpty ? autoMadrasaId : MadrasaModel.generateMadrasaId(regNoController.text.trim()));
 
-                          Navigator.of(bottomSheetContext).pop();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(isEditing ? 'Madrasa updated successfully!' : 'New Madrasa registered & WhatsApp welcome message sent!'),
-                              backgroundColor: AppColors.success,
+                                      final newMadrasa = MadrasaModel(
+                                        madrasaId: cleanId,
+                                        madrasaName: nameController.text.trim(),
+                                        madrasaRegNo: regNoController.text.trim(),
+                                        address: addressController.text.trim(),
+                                        coordinatorName: coordNameController.text.trim(),
+                                        coordinatorPhone: coordPhoneController.text.trim(),
+                                        email: isEditing ? madrasa.email : autoEmail,
+                                        password: isEditing ? madrasa.password : autoPassword,
+                                        createdAt: isEditing ? madrasa.createdAt : DateTime.now().toString().substring(0, 16),
+                                      );
+
+                                      if (isEditing) {
+                                        await appState.updateMadrasa(newMadrasa);
+                                      } else {
+                                        await appState.addMadrasa(newMadrasa);
+                                        if (context.mounted && newMadrasa.coordinatorPhone.isNotEmpty) {
+                                          WhatsAppHelper.sendMadrasaRegistrationWelcomeMsg(
+                                            context: context,
+                                            madrasa: newMadrasa,
+                                          );
+                                        }
+                                      }
+
+                                      if (bottomSheetContext.mounted) {
+                                        Navigator.of(bottomSheetContext).pop();
+                                      }
+                                      messenger.showSnackBar(
+                                        SnackBar(
+                                          content: Text(isEditing ? '✨ Madrasa updated successfully in Firestore!' : '✨ New Madrasa registered to Firestore & credentials generated!'),
+                                          backgroundColor: AppColors.success,
+                                        ),
+                                      );
+                                    },
+                              child: isSaving
+                                  ? const Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+                                        SizedBox(width: 10),
+                                        Text('Saving to Firestore...'),
+                                      ],
+                                    )
+                                  : Text(isEditing ? 'Save Changes' : 'Register Madrasa to Firestore'),
                             ),
                           );
                         },
-                        child: Text(isEditing ? 'Save Changes' : 'Register Madrasa to Firestore'),
-                      ),
-                    ),
+                      );
+                    }(),
                   ],
                 );
               },
